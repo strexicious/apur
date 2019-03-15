@@ -82,7 +82,7 @@ fn main() {
     unlinked_program.add_shader(Path::new("res/shader.frag"), gl::FRAGMENT_SHADER).unwrap();
     let program = unlinked_program.link().unwrap_or_else(move |error| {
         eprintln!("An error occured on link: {}", error);
-        ::std::process::exit(-1);
+        ::std::process::exit(-1)
     });
 
     // update -- display

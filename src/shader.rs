@@ -1,6 +1,5 @@
-use std::io::Read;
+use std::fs;
 use std::path::Path;
-use std::fs::File;
 use std::ffi::{CString};
 
 pub struct UnlinkedProgram {
@@ -56,12 +55,11 @@ impl UnlinkedProgram {
         &mut self, source_path: &Path,
         shader_type: gl::types::GLuint
     ) -> Result<(), String> {
-        // TODO: clean up unwraps here
-        // read the source from the file
-        let mut file = File::open(source_path).unwrap();
-        let mut source = String::new();
-        file.read_to_string(&mut source).unwrap();
-        
+        let source = fs::read_to_string(source_path)
+            .map_err(move |_error| {
+                String::from("[ OS ] Failed to open/read the shader file")
+            })?;
+
         let source = CString::new(source).unwrap();
 
         let id = UnlinkedProgram::create_shader(shader_type)?;
