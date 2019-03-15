@@ -14,34 +14,29 @@ impl UnlinkedProgram {
         }
     }
 
-    pub fn add_shader(&mut self, source_path: &Path, kind: gl::types::GLuint) -> Result<(), String> {
-        let mut file = File::open(source_path).unwrap();
-        let mut source = String::new();
-        file.read_to_string(&mut source).unwrap();
-        
-        let source = CString::new(source).unwrap();
+    fn create_shader(shader_type: gl::types::GLuint) -> Result<gl::types::GLuint, String> {
+        match shader_type {
+            gl::VERTEX_SHADER | gl::GEOMETRY_SHADER | gl::FRAGMENT_SHADER => {
+                let id = unsafe { gl::CreateShader(shader_type) };
+                if id == 0 {
+                    return Err(String::from("[ GL ] Failed to create a shader"));
+                }
+                Ok(id)
+            },
+            _ => Err(String::from("Invalid shader type"))
+        }        
+    }
 
-        // WARNING: we can't trust `kind` is right
-        let id = unsafe { gl::CreateShader(kind) };
-
-        unsafe {
-            gl::ShaderSource(id, 1, &source.as_ptr(), std::ptr::null());
-            gl::CompileShader(id);
-        }
-
+    fn handle_compile_error(id: gl::types::GLuint) -> Result<(), String> {
         let mut success: gl::types::GLint = 1;
-        unsafe {
-            gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut success);
-        }
+        unsafe { gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut success); }
 
         if success == 0 {
             let mut len: gl::types::GLint = 0;
-            unsafe {
-                gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut len);
-            }
+            unsafe { gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut len); }
 
+            // reserve buffer
             let error: CString = unsafe { CString::from_vec_unchecked(vec![b' '; len as usize]) };
-
             unsafe {
                 gl::GetShaderInfoLog(
                     id,
@@ -57,31 +52,46 @@ impl UnlinkedProgram {
         Ok(())
     }
 
-    pub fn link(self) -> Result<Program, String> {
-        let program = Program { id: unsafe { gl::CreateProgram() } };
+    pub fn add_shader(
+        &mut self, source_path: &Path,
+        shader_type: gl::types::GLuint
+    ) -> Result<(), String> {
+        // TODO: clean up unwraps here
+        // read the source from the file
+        let mut file = File::open(source_path).unwrap();
+        let mut source = String::new();
+        file.read_to_string(&mut source).unwrap();
+        
+        let source = CString::new(source).unwrap();
 
-        for shader in &self.shaders {
-            unsafe { gl::AttachShader(program.id, *shader); }
-        }
+        let id = UnlinkedProgram::create_shader(shader_type)?;
 
-        unsafe { gl::LinkProgram(program.id); }
-
-        let mut success: gl::types::GLint = 1;
+        // try to compile
         unsafe {
-            gl::GetProgramiv(program.id, gl::LINK_STATUS, &mut success);
+            gl::ShaderSource(id, 1, &source.as_ptr(), std::ptr::null());
+            gl::CompileShader(id);
         }
 
+        // handle errors
+        UnlinkedProgram::handle_compile_error(id)?;
+        
+        self.shaders.push(id);
+
+        Ok(())
+    }
+
+    fn handle_link_error(id: gl::types::GLuint) -> Result<(), String> {
+        let mut success: gl::types::GLint = 1;
+        unsafe { gl::GetProgramiv(id, gl::LINK_STATUS, &mut success); }
+        
         if success == 0 {
             let mut len: gl::types::GLint = 0;
-            unsafe {
-                gl::GetProgramiv(program.id, gl::INFO_LOG_LENGTH, &mut len);
-            }
+            unsafe { gl::GetProgramiv(id, gl::INFO_LOG_LENGTH, &mut len); }
 
             let error: CString = unsafe { CString::from_vec_unchecked(vec![b' '; len as usize]) };
-
             unsafe {
                 gl::GetProgramInfoLog(
-                    program.id,
+                    id,
                     len,
                     std::ptr::null_mut(),
                     error.as_ptr() as *mut gl::types::GLchar
@@ -90,6 +100,27 @@ impl UnlinkedProgram {
 
             return Err(error.to_string_lossy().into_owned());
         }
+        Ok(())
+    }
+
+    fn create_program() -> Result<gl::types::GLuint, String> {
+        let id = unsafe { gl::CreateProgram() };
+        if id == 0 {
+            return Err(String::from("[ GL ] Failed to create a program"));
+        }
+        Ok(id)
+    }
+
+    pub fn link(self) -> Result<Program, String> {
+        let program = Program { id: UnlinkedProgram::create_program()? };
+
+        for shader in &self.shaders {
+            unsafe { gl::AttachShader(program.id, *shader); }
+        }
+
+        unsafe { gl::LinkProgram(program.id); }
+
+        UnlinkedProgram::handle_link_error(program.id)?;
         
         for shader in &self.shaders {
             unsafe { gl::DetachShader(program.id, *shader); }

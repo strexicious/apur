@@ -5,11 +5,14 @@ use glutin::ContextTrait;
 mod shader;
 use shader::{UnlinkedProgram, Program};
 
+const WINDOW_WIDTH: u16 = 800;
+const WINDOW_HEIGHT: u16 = 600;
+
 fn main() {
     let mut el = glutin::EventsLoop::new();
     let wb = glutin::WindowBuilder::new()
         .with_title("APUR!")
-        .with_dimensions(LogicalSize::new(800.0, 600.0));
+        .with_dimensions(LogicalSize::new(f64::from(WINDOW_WIDTH), f64::from(WINDOW_HEIGHT)));
     let windowed_context = glutin::ContextBuilder::new()
         .build_windowed(wb, &el)
         .unwrap();
@@ -31,8 +34,20 @@ fn main() {
     ];
 
     // intitialization
+    unsafe {
+        gl::Viewport(0, 0, gl::types::GLsizei::from(WINDOW_WIDTH), gl::types::GLsizei::from(WINDOW_HEIGHT));
+    }
+    
     let mut vao: gl::types::GLuint = 0;
     let mut vbo: gl::types::GLuint = 0;
+
+    // WARNING: we are assuming gl::types::GLsizeiptr is always isize in Rust
+    let data_size = triangle_vertices.len() * std::mem::size_of::<f32>();
+    if (std::isize::MAX as usize) < data_size {
+        eprintln!("VBO data is greater than what can be passed in");
+        ::std::process::exit(-1);
+    }
+    
     unsafe {
         // buffer object
         gl::GenBuffers(1, &mut vbo as *mut gl::types::GLuint);
@@ -40,7 +55,7 @@ fn main() {
         gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
         gl::BufferData(
             gl::ARRAY_BUFFER,
-            9,
+            data_size as gl::types::GLsizeiptr,
             triangle_vertices.as_ptr() as *const gl::types::GLvoid,
             gl::STATIC_DRAW
         );
@@ -59,7 +74,6 @@ fn main() {
         );
 
         gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-        gl::BindVertexArray(0);
     };
 
     // for shaders
@@ -92,7 +106,6 @@ fn main() {
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT);
 
-            gl::BindVertexArray(vao);
             gl::DrawArrays(
                 gl::TRIANGLES,
                 0,
