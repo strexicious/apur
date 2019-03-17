@@ -27,10 +27,13 @@ fn main() {
     }
 
     // data
-    let triangle_vertices: [f32; 9] = [
+    let triangle_vertices: [f32; 18] = [
         0.0, 0.5, 0.0,
         0.5,-0.5, 0.0,
-       -0.5,-0.5, 0.0
+       -0.5,-0.5, 0.0,
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0
     ];
 
     // intitialization
@@ -64,14 +67,10 @@ fn main() {
         gl::GenVertexArrays(1, &mut vao as *mut gl::types::GLuint);
         gl::BindVertexArray(vao);
         gl::EnableVertexAttribArray(0);
-        gl::VertexAttribPointer(
-            0,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            0,
-            std::ptr::null()
-        );
+        gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
+        gl::EnableVertexAttribArray(1);
+        gl::VertexAttribPointer(1, 3, gl::FLOAT, gl::FALSE, 0,
+            (9 * std::mem::size_of::<f32>()) as *const gl::types::GLvoid);
 
         gl::BindBuffer(gl::ARRAY_BUFFER, 0);
     };
@@ -80,10 +79,13 @@ fn main() {
     let mut unlinked_program = UnlinkedProgram::new();
     unlinked_program.add_shader(Path::new("res/shader.vert"), gl::VERTEX_SHADER).unwrap();
     unlinked_program.add_shader(Path::new("res/shader.frag"), gl::FRAGMENT_SHADER).unwrap();
-    let program = unlinked_program.link().unwrap_or_else(move |error| {
+    let mut program = unlinked_program.link().unwrap_or_else(move |error| {
         eprintln!("An error occured on link: {}", error);
         ::std::process::exit(-1)
     });
+    program.add_uniform(String::from("offset")).unwrap();
+    let offset: [f32; 3] = [0.3, 0.3, 0.0];
+    program.load_uniform("offset", &offset).unwrap();
 
     // update -- display
     let mut running = true;

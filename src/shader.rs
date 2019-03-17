@@ -1,6 +1,55 @@
 use std::fs;
+use std::char;
 use std::path::Path;
 use std::ffi::{CString};
+use std::collections::HashMap;
+
+enum UniformType {
+    Vec3Uniform,
+}
+
+pub struct Uniform {
+    loc: gl::types::GLint,
+    uniform_type: UniformType,
+}
+
+impl Uniform {
+    fn new(loc: gl::types::GLint, program_id: gl::types::GLuint) -> Result<Self, String> {
+        let mut uniform_type = gl::INVALID_ENUM;
+        let mut _uniform_size: gl::types::GLint = 0; // TODO: check if this is actually needed,
+        // or can we trick it into not writing this at all
+        unsafe {
+            gl::GetActiveUniform(
+                program_id,
+                loc as gl::types::GLuint, // note, loc is prequisted to be positive
+                0,
+                std::ptr::null_mut(),
+                &mut _uniform_size as *mut gl::types::GLint,
+                &mut uniform_type as *mut gl::types::GLenum,
+                std::ptr::null_mut()
+            );
+        }
+
+        match uniform_type {
+            gl::FLOAT_VEC3 => Ok(Self { loc, uniform_type: UniformType::Vec3Uniform }),
+            _ => Err(String::from("Uniform type not supported")),
+        }
+    }
+
+    fn load_data(&self, data: &[f32]) -> Result<(), String> {
+        use UniformType::*;
+        
+        match self.uniform_type {
+            Vec3Uniform => {
+                if data.len() != 3 {
+                    return Err(String::from("`vec3` uniform requires 3 components"));
+                }
+                unsafe { gl::Uniform3fv(self.loc, 1, data.as_ptr()); }
+            }
+        }
+        Ok(())
+    }
+}
 
 pub struct UnlinkedProgram {
     shaders: Vec<gl::types::GLuint>,
@@ -86,6 +135,7 @@ impl UnlinkedProgram {
             let mut len: gl::types::GLint = 0;
             unsafe { gl::GetProgramiv(id, gl::INFO_LOG_LENGTH, &mut len); }
 
+            // reserve buffer
             let error: CString = unsafe { CString::from_vec_unchecked(vec![b' '; len as usize]) };
             unsafe {
                 gl::GetProgramInfoLog(
@@ -110,7 +160,7 @@ impl UnlinkedProgram {
     }
 
     pub fn link(self) -> Result<Program, String> {
-        let program = Program { id: UnlinkedProgram::create_program()? };
+        let program = Program { id: UnlinkedProgram::create_program()?, uniforms: HashMap::new() };
 
         for shader in &self.shaders {
             unsafe { gl::AttachShader(program.id, *shader); }
@@ -118,11 +168,12 @@ impl UnlinkedProgram {
 
         unsafe { gl::LinkProgram(program.id); }
 
-        UnlinkedProgram::handle_link_error(program.id)?;
-        
+        // I don't think if it fails it detaches automatically, so we do it always
         for shader in &self.shaders {
             unsafe { gl::DetachShader(program.id, *shader); }
         }
+
+        UnlinkedProgram::handle_link_error(program.id)?;
         
         Ok(program)
     }
@@ -140,9 +191,36 @@ impl Drop for UnlinkedProgram {
 
 pub struct Program {
     id: gl::types::GLuint,
+    uniforms: HashMap<String, Uniform>,
 }
 
 impl Program {
+    pub fn add_uniform(&mut self, name: String) -> Result<(), String> {
+        if self.uniforms.get(&name).is_some() {
+            return Err(String::from("Uniform already added"));
+        }
+        
+        if name.find(char::is_whitespace).is_some() {
+            return Err(String::from("The argument `name` cannot contain a whitespace"));
+        }
+        
+        let c_name = CString::new(name.clone()).unwrap();
+        let loc = unsafe { gl::GetUniformLocation(self.id, c_name.as_ptr()) };
+        if loc == -1 {
+            return Err(String::from("Uniform not found"));
+        }
+
+        self.uniforms.insert(name, Uniform::new(loc, self.id)?);
+        Ok(())
+    }
+
+    pub fn load_uniform(&self, name: &str, data: &[f32]) -> Result<(), String> {
+        self.activate();
+        self.uniforms[name].load_data(data)?;
+        Program::deactivate();
+        Ok(())
+    }
+    
     pub fn activate(&self) {
         unsafe {
             gl::UseProgram(self.id);
