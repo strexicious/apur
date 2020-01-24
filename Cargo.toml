@@ -1,9 +1,5 @@
-[package]
-name = "apur"
-version = "0.1.0"
-authors = ["Strexicious <strexicious@gmail.com>"]
-edition = "2018"
+[workspace]
 
-[dependencies]
-gl = "0.6.0"
-glutin = "0.20.0"
+members = [
+    "apur_renderer"
+]
