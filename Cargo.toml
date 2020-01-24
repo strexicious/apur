@@ -1,5 +1,6 @@
 [workspace]
 
 members = [
-    "apur_renderer"
+    "apur_renderer",
+    "apur_physics"
 ]
