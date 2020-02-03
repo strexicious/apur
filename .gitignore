@@ -1,2 +1,3 @@
 /target
 **/*.rs.bk
+apur_renderer/res/*.spv

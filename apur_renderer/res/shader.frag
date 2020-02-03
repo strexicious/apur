@@ -1,8 +1,8 @@
-#version 330
+#version 450
 
-in vec3 interopColor;
+layout(location = 0) in vec3 interopColor;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     fragColor = vec4(interopColor, 1.0);

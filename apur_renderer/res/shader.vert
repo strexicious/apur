@@ -1,11 +1,13 @@
-#version 330
+#version 450
 
 layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 color;
 
-out vec3 interopColor;
+layout(location = 0) out vec3 interopColor;
 
-uniform vec3 offset;
+layout(set = 0, binding = 0) uniform Props {
+    vec3 offset;
+};
 
 void main() {
     interopColor = color;

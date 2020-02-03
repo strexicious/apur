@@ -1,122 +1,182 @@
-use std::path::Path;
-use glutin::dpi::*;
-use glutin::ContextTrait;
-
-mod shader;
-use shader::{UnlinkedProgram, Program};
+use winit::{
+    event::{Event, WindowEvent},
+    event_loop::{EventLoop, ControlFlow},
+    window::WindowBuilder,
+    dpi::LogicalSize,
+};
+use wgpu::{Surface, Adapter, Color};
 
 const WINDOW_WIDTH: u16 = 800;
 const WINDOW_HEIGHT: u16 = 600;
 
 fn main() {
-    let mut el = glutin::EventsLoop::new();
-    let wb = glutin::WindowBuilder::new()
+    let el = EventLoop::new();
+    let window = WindowBuilder::new()
         .with_title("APUR!")
-        .with_dimensions(LogicalSize::new(f64::from(WINDOW_WIDTH), f64::from(WINDOW_HEIGHT)));
-    let windowed_context = glutin::ContextBuilder::new()
-        .build_windowed(wb, &el)
-        .unwrap();
+        .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
+        .with_resizable(false)
+        .build(&el)
+        .expect("Error building window");
     
-    unsafe {
-        windowed_context.make_current().unwrap();
-    }
+    let surface = Surface::create(&window);
+    let adapter = Adapter::request(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::Default,
+        backends: wgpu::BackendBit::PRIMARY,
+    }).expect("Couldn't get hardware adapter");
 
-    unsafe {
-        gl::load_with(|symbol| windowed_context.get_proc_address(symbol) as *const _);
-        gl::ClearColor(0.4, 0.1, 0.1, 1.0);
-    }
+    let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
+        extensions: wgpu::Extensions::default(),
+        limits: wgpu::Limits::default(),
+    });
+    
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        bindings: &[
+            wgpu::BindGroupLayoutBinding {
+                binding: 0,
+                visibility: wgpu::ShaderStage::VERTEX,
+                ty: wgpu::BindingType::UniformBuffer {
+                    dynamic: false,
+                },
+            }
+        ]
+    });
 
-    // data
-    let triangle_vertices: [f32; 18] = [
-        0.0, 0.5, 0.0,
-        0.5,-0.5, 0.0,
-       -0.5,-0.5, 0.0,
-        1.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 0.0, 1.0
+    let props_buffer = device
+        .create_buffer_mapped(3, wgpu::BufferUsage::UNIFORM)
+        .fill_from_slice(&[0.3f32, -0.3f32, 0.0f32]);
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &bind_group_layout,
+        bindings: &[
+            wgpu::Binding {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &props_buffer,
+                    range: 0 .. 12,
+                },
+            }
+        ],
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        bind_group_layouts: &[&bind_group_layout],
+    });
+
+    let vs = include_bytes!("../res/shader.vert.spv");
+    let vs_module =
+        device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs[..])).unwrap());
+
+    let fs = include_bytes!("../res/shader.frag.spv");
+    let fs_module =
+        device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs[..])).unwrap());
+    
+    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        layout: &pipeline_layout,
+        vertex_stage: wgpu::ProgrammableStageDescriptor {
+            module: &vs_module,
+            entry_point: "main",
+        },
+        fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
+            module: &fs_module,
+            entry_point: "main",
+        }),
+        rasterization_state: Some(wgpu::RasterizationStateDescriptor {
+            front_face: wgpu::FrontFace::Cw,
+            cull_mode: wgpu::CullMode::None,
+            depth_bias: 0,
+            depth_bias_slope_scale: 0.0,
+            depth_bias_clamp: 0.0,
+        }),
+        primitive_topology: wgpu::PrimitiveTopology::TriangleList,
+        color_states: &[wgpu::ColorStateDescriptor {
+            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+            color_blend: wgpu::BlendDescriptor::REPLACE,
+            alpha_blend: wgpu::BlendDescriptor::REPLACE,
+            write_mask: wgpu::ColorWrite::ALL,
+        }],
+        depth_stencil_state: None,
+        index_format: wgpu::IndexFormat::Uint16,
+        vertex_buffers: &[wgpu::VertexBufferDescriptor {
+            stride: 24,
+            step_mode: wgpu::InputStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttributeDescriptor {
+                    offset: 0,
+                    format: wgpu::VertexFormat::Float3,
+                    shader_location: 0,
+                },
+                wgpu::VertexAttributeDescriptor {
+                    offset: 12,
+                    format: wgpu::VertexFormat::Float3,
+                    shader_location: 1,
+                },
+            ]
+        }],
+        sample_count: 1,
+        sample_mask: !0,
+        alpha_to_coverage_enabled: false,
+    });
+    
+    let clear_color = Color { r: 0.4, g: 0.1, b: 0.1, a: 1.0, };
+    let data: [f32; 18] = [
+        // position    color    
+         0.0, -0.5, 0.0, 1.0, 0.0, 0.0,
+         0.5,  0.5, 0.0, 0.0, 1.0, 0.0,
+        -0.5,  0.5, 0.0, 0.0, 0.0, 1.0,
     ];
+    let tri_vbuffer = device
+        .create_buffer_mapped(18, wgpu::BufferUsage::VERTEX)
+        .fill_from_slice(&data);
 
-    // intitialization
-    unsafe {
-        gl::Viewport(0, 0, gl::types::GLsizei::from(WINDOW_WIDTH), gl::types::GLsizei::from(WINDOW_HEIGHT));
-    }
-    
-    let mut vao: gl::types::GLuint = 0;
-    let mut vbo: gl::types::GLuint = 0;
-
-    // WARNING: we are assuming gl::types::GLsizeiptr is always isize in Rust
-    let data_size = triangle_vertices.len() * std::mem::size_of::<f32>();
-    if (std::isize::MAX as usize) < data_size {
-        eprintln!("VBO data is greater than what can be passed in");
-        ::std::process::exit(-1);
-    }
-    
-    unsafe {
-        // buffer object
-        gl::GenBuffers(1, &mut vbo as *mut gl::types::GLuint);
-        
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-        gl::BufferData(
-            gl::ARRAY_BUFFER,
-            data_size as gl::types::GLsizeiptr,
-            triangle_vertices.as_ptr() as *const gl::types::GLvoid,
-            gl::STATIC_DRAW
-        );
-
-        // vertex array object
-        gl::GenVertexArrays(1, &mut vao as *mut gl::types::GLuint);
-        gl::BindVertexArray(vao);
-        gl::EnableVertexAttribArray(0);
-        gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
-        gl::EnableVertexAttribArray(1);
-        gl::VertexAttribPointer(1, 3, gl::FLOAT, gl::FALSE, 0,
-            (9 * std::mem::size_of::<f32>()) as *const gl::types::GLvoid);
-
-        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+    let sc_desc = wgpu::SwapChainDescriptor {
+        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        format: wgpu::TextureFormat::Bgra8UnormSrgb,
+        width: WINDOW_WIDTH as u32,
+        height: WINDOW_HEIGHT as u32,
+        present_mode: wgpu::PresentMode::Vsync,
     };
 
-    // for shaders
-    let mut unlinked_program = UnlinkedProgram::new();
-    unlinked_program.add_shader(Path::new("res/shader.vert"), gl::VERTEX_SHADER).unwrap();
-    unlinked_program.add_shader(Path::new("res/shader.frag"), gl::FRAGMENT_SHADER).unwrap();
-    let mut program = unlinked_program.link().unwrap_or_else(move |error| {
-        eprintln!("An error occured on link: {}", error);
-        ::std::process::exit(-1)
-    });
-    program.add_uniform(String::from("offset")).unwrap();
-    let offset: [f32; 3] = [0.3, 0.3, 0.0];
-    program.load_uniform("offset", &offset).unwrap();
+    let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
-    // update -- display
-    let mut running = true;
-    while running {
-        el.poll_events(|event| {
-            if let glutin::Event::WindowEvent{ event, .. } =  event {
+    el.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
+
+        match event {
+            Event::WindowEvent { event, ..} => {
                 match event {
-                    glutin::WindowEvent::CloseRequested => running = false,
-                    glutin::WindowEvent::Resized(logical_size) => {
-                        let dpi_factor = windowed_context.get_hidpi_factor();
-                        windowed_context.resize(logical_size.to_physical(dpi_factor));
+                    WindowEvent::CloseRequested => {
+                        println!("Shutting down...");
+                        *control_flow = ControlFlow::Exit;
                     },
-                    _ => ()
+                    _ => { }
                 }
-            }
-        });
+            },
+            Event::MainEventsCleared => {
+                window.request_redraw();
+            },
+            Event::RedrawRequested(_) => {
+                let frame = swap_chain.get_next_texture();
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+                {
+                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                            attachment: &frame.view,
+                            resolve_target: None,
+                            load_op: wgpu::LoadOp::Clear,
+                            store_op: wgpu::StoreOp::Store,
+                            clear_color,
+                        }],
+                        depth_stencil_attachment: None,
+                    });
+                    rpass.set_pipeline(&render_pipeline);
+                    rpass.set_bind_group(0, &bind_group, &[]);
+                    rpass.set_vertex_buffers(0, &[(&tri_vbuffer, 0)]);
+                    rpass.draw(0 .. 3, 0 .. 1);
+                }
 
-        program.activate();
-
-        unsafe {
-            gl::Clear(gl::COLOR_BUFFER_BIT);
-
-            gl::DrawArrays(
-                gl::TRIANGLES,
-                0,
-                3
-            );
+                queue.submit(&[encoder.finish()]);
+            },
+            _ => { }
         }
+    });
 
-        windowed_context.swap_buffers().unwrap();
-    }
-
-    Program::deactivate();
 }
