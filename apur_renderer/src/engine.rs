@@ -1,17 +1,19 @@
+use winit::window::Window;
+
 #[derive(Clone, Copy)]
 #[repr(C)]
-pub struct Vertex {
-    pub pos: (f32, f32, f32),
-    pub color: (f32, f32, f32),
+struct Vertex {
+    pos: [f32; 3],
+    color: [f32; 3],
 }
 
-pub struct Mesh {
+struct Mesh {
     vertices: Vec<Vertex>,
     vbuffer: wgpu::Buffer,
 }
 
 impl Mesh {
-    pub fn new(device: &wgpu::Device, vertices: Vec<Vertex>) -> Self {
+    fn new(device: &wgpu::Device, vertices: Vec<Vertex>) -> Self {
         let vbuffer = device
             .create_buffer_mapped(vertices.len(), wgpu::BufferUsage::VERTEX)
             .fill_from_slice(&vertices);
@@ -24,14 +26,14 @@ impl Mesh {
     }
 }
 
-pub struct Renderer {
+struct Renderer {
     meshes: Vec<Mesh>,
     binds_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
 }
 
 impl Renderer {
-    pub fn new(device: &wgpu::Device) -> Self {
+    fn new(device: &wgpu::Device) -> Self {
         // shaders
         let vs_source = include_bytes!("../res/shader.vert.spv");
         let vs_module = device.create_shader_module(&wgpu::read_spirv(
@@ -113,13 +115,13 @@ impl Renderer {
         }
     }
 
-    pub fn add_mesh(&mut self, mesh: Mesh) {
+    fn add_mesh(&mut self, mesh: Mesh) {
         self.meshes.push(mesh);
     }
 
     // TODO: create_binds is vague, and the appropiate funtions should be created,
     // like set light color, position, set fog thickness, etc.
-    pub fn create_binds(&self, device: &wgpu::Device) -> wgpu::BindGroup {
+    fn create_binds(&self, device: &wgpu::Device) -> wgpu::BindGroup {
         let props_buffer = device
             .create_buffer_mapped(3, wgpu::BufferUsage::UNIFORM)
             .fill_from_slice(&[0.3f32, -0.3f32, 0.0f32]);
@@ -138,7 +140,7 @@ impl Renderer {
         })
     }
 
-    pub fn render(&self, frame: &wgpu::SwapChainOutput, cmd_encoder: &mut wgpu::CommandEncoder, device: &wgpu::Device) {
+    fn render(&self, frame: &wgpu::SwapChainOutput, cmd_encoder: &mut wgpu::CommandEncoder, device: &wgpu::Device) {
         
         const CLEAR_COLOR: wgpu::Color = wgpu::Color { r: 0.4, g: 0.1, b: 0.1, a: 1.0 };
         
@@ -158,5 +160,51 @@ impl Renderer {
         for mesh in &self.meshes {
             mesh.draw(&mut rpass);
         }
+    }
+}
+
+pub struct Engine {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    swapchain: wgpu::SwapChain,
+    renderer: Renderer,
+}
+
+impl Engine {
+    pub fn new(window: &Window) -> Self {
+        let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::Default,
+            backends: wgpu::BackendBit::PRIMARY,
+        }).expect("Couldn't get hardware adapter");
+        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
+            extensions: wgpu::Extensions::default(),
+            limits: wgpu::Limits::default(),
+        });
+        
+        let surface = wgpu::Surface::create(window);
+        let swapchain = device.create_swap_chain(&surface, &wgpu::SwapChainDescriptor {
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+            width: window.inner_size().width,
+            height: window.inner_size().height,
+            present_mode: wgpu::PresentMode::Vsync,
+        });
+
+        let mut renderer = Renderer::new(&device);
+        let triangle = Mesh::new(&device, vec![
+            Vertex { pos: [ 0.0, -0.5, 0.0], color: [1.0, 0.0, 0.0] },
+            Vertex { pos: [ 0.5,  0.5, 0.0], color: [0.0, 1.0, 0.0] },
+            Vertex { pos: [-0.5,  0.5, 0.0], color: [0.0, 0.0, 1.0] },
+        ]);
+        renderer.add_mesh(triangle);
+
+        Self { device, queue, swapchain, renderer }
+    }
+
+    pub fn render(&mut self) {
+        let frame = self.swapchain.get_next_texture();
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+        self.renderer.render(&frame, &mut encoder, &self.device);
+        self.queue.submit(&[encoder.finish()]);
     }
 }
