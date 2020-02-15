@@ -1,4 +1,5 @@
 use winit::window::Window;
+use winit::event::DeviceEvent;
 
 mod camera;
 mod model;
@@ -77,5 +78,16 @@ impl Engine {
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
         self.queue.submit(&[encoder.finish()]);
+    }
+
+    pub fn handle_device_event(&mut self, event: DeviceEvent) {
+        #[allow(clippy::single_match)]
+        match event {
+            DeviceEvent::MouseMotion{ delta: (dx, dy) } => {
+                self.camera.change_angle(dx as f32, dy as f32);
+                self.render_data.update_view(self.camera.view());
+            },
+            _ => { },
+        }
     }
 }

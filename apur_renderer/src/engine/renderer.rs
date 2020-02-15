@@ -32,7 +32,7 @@ impl RenderData {
         });
 
         let uniforms_buffer = device
-            .create_buffer_mapped(2, wgpu::BufferUsage::UNIFORM)
+            .create_buffer_mapped(2, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::MAP_WRITE)
             .fill_from_slice(&[view_trans, proj_trans]);
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -66,6 +66,13 @@ impl RenderData {
 
         Self { model, texture_binds, bind_group, uniforms_buffer, sampler }
     }
+
+    pub fn update_view(&mut self, mut view_trans: Mat4) {
+        self.uniforms_buffer.map_write_async(0, 64, move |map_res| {
+            let mut mapping = map_res.expect("failed to map matrices uniform buffer in update_view");
+            mapping.data = view_trans.as_mut();
+        });
+    }
 }
 
 pub struct Renderer {
@@ -89,7 +96,7 @@ impl Renderer {
                 wgpu::BindGroupLayoutBinding {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX,
-                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                    ty: wgpu::BindingType::UniformBuffer { dynamic: true },
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 1,

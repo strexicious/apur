@@ -3,15 +3,26 @@ use glam::{Vec3, Mat4};
 pub struct Camera {
     position: Vec3,
     forward: Vec3,
+    x_angle: f32,
+    y_angle: f32,
 }
 
 impl Camera {
     pub fn view(&self) -> Mat4 {
         Mat4::look_at_rh(self.position, self.position + self.forward, glam::vec3(0.0, 1.0, 0.0))
     }
-}
 
-impl Camera {
+    pub fn change_angle(&mut self, dx: f32, dy: f32) {
+        self.x_angle = (self.x_angle + dx.to_radians()) % (2.0 * std::f32::consts::PI);
+        self.y_angle = (self.y_angle + dy.to_radians()).min(80f32.to_radians()).max((-80f32).to_radians());
+        
+        let cosx = self.x_angle.to_radians().cos();
+        let sinx = self.x_angle.to_radians().sin();
+        let cosy = self.y_angle.to_radians().cos();
+        let siny = self.y_angle.to_radians().sin();
+        self.forward = glam::vec3(sinx * cosy, -siny, -cosx * cosy).normalize();
+    }
+    
     pub fn move_pos(&mut self, units: f32) {
         self.position += units * self.forward;
     }
@@ -22,6 +33,8 @@ impl Default for Camera {
         Self {
             position: Vec3::zero(),
             forward: -Vec3::unit_z(),
+            x_angle: 0.0,
+            y_angle: 0.0,
         }
     }
 }
