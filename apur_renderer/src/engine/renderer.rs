@@ -20,9 +20,9 @@ impl RenderData {
         texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
@@ -32,7 +32,7 @@ impl RenderData {
         });
 
         let uniforms_buffer = device
-            .create_buffer_mapped(2, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::MAP_WRITE)
+            .create_buffer_mapped(2, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_WRITE)
             .fill_from_slice(&[view_trans, proj_trans]);
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -69,9 +69,13 @@ impl RenderData {
 
     pub fn update_view(&mut self, mut view_trans: Mat4) {
         self.uniforms_buffer.map_write_async(0, 64, move |map_res| {
-            let mut mapping = map_res.expect("failed to map matrices uniform buffer in update_view");
-            mapping.data = view_trans.as_mut();
+            let mapping = map_res.expect("failed to map matrices uniform buffer in update_view");
+            mapping.data.copy_from_slice(view_trans.as_mut());
         });
+    }
+
+    pub fn get_uniforms_buffer(&self) -> &wgpu::Buffer {
+        &self.uniforms_buffer
     }
 }
 
@@ -96,7 +100,7 @@ impl Renderer {
                 wgpu::BindGroupLayoutBinding {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX,
-                    ty: wgpu::BindingType::UniformBuffer { dynamic: true },
+                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 1,

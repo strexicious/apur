@@ -9,17 +9,17 @@ pub struct Camera {
 
 impl Camera {
     pub fn view(&self) -> Mat4 {
-        Mat4::look_at_rh(self.position, self.position + self.forward, glam::vec3(0.0, 1.0, 0.0))
+        Mat4::look_at_rh(self.position, self.position + self.forward, glam::vec3(0.0, -1.0, 0.0))
     }
 
     pub fn change_angle(&mut self, dx: f32, dy: f32) {
         self.x_angle = (self.x_angle + dx.to_radians()) % (2.0 * std::f32::consts::PI);
         self.y_angle = (self.y_angle + dy.to_radians()).min(80f32.to_radians()).max((-80f32).to_radians());
         
-        let cosx = self.x_angle.to_radians().cos();
-        let sinx = self.x_angle.to_radians().sin();
-        let cosy = self.y_angle.to_radians().cos();
-        let siny = self.y_angle.to_radians().sin();
+        let cosx = self.x_angle.cos();
+        let sinx = self.x_angle.sin();
+        let cosy = self.y_angle.cos();
+        let siny = self.y_angle.sin();
         self.forward = glam::vec3(sinx * cosy, -siny, -cosx * cosy).normalize();
     }
     
@@ -51,7 +51,7 @@ impl Frustum {
         Self {
             fov_y: 90.0,
             aspect_ratio: width as f32 / height as f32,
-            znear: 0.1,
+            znear: 0.01,
             zfar: 100.0,
         }
     }
