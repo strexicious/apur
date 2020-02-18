@@ -9,7 +9,7 @@ pub struct Camera {
 
 impl Camera {
     pub fn view(&self) -> Mat4 {
-        Mat4::look_at_rh(self.position, self.position + self.forward, glam::vec3(0.0, -1.0, 0.0))
+        Mat4::look_at_rh(self.position, self.position + self.forward, glam::vec3(0.0, 1.0, 0.0))
     }
 
     pub fn change_angle(&mut self, dx: f32, dy: f32) {
