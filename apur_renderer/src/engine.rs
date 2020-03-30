@@ -1,5 +1,4 @@
 use winit::window::Window;
-use winit::event::DeviceEvent;
 
 mod camera;
 mod model;
@@ -7,15 +6,16 @@ mod renderer;
 
 use model::{Model};
 use camera::{Camera, Frustum};
-use renderer::{Renderer, RenderData};
+use renderer::{Renderer, RenderData, SkyBoxRenderer};
 
 pub struct Engine {
     device: wgpu::Device,
     queue: wgpu::Queue,
     swapchain: wgpu::SwapChain,
     depth_texture_view: wgpu::TextureView,
-    render_data: RenderData,
+    // render_data: RenderData,
     renderer: Renderer,
+    sb_renderer: SkyBoxRenderer,
     update_mats: bool,
     camera: Camera,
     frustum: Frustum,
@@ -64,23 +64,26 @@ impl Engine {
         let depth_texture_view = depth_texture.create_default_view();
 
         let renderer = Renderer::new(&device);
-        let model = Model::load_model(&device, &mut queue, "Planks of wood");
-        let render_data = RenderData::new(
-            &device,
-            model,
-            camera.view(),
-            frustum.projection(),
-            renderer.get_bind_group_layout(),
-            renderer.get_texture_bind_group_layout()
-        );
+        // let model = Model::load_model(&device, &mut queue, "sponza");
+        // let render_data = RenderData::new(
+        //     &device,
+        //     // model,
+        //     camera.view(),
+        //     frustum.projection(),
+        //     renderer.get_bind_group_layout(),
+        //     renderer.get_texture_bind_group_layout()
+        // );
+
+        let sb_renderer = SkyBoxRenderer::new(&device, "tm", &mut queue);
 
         Self {
             device,
             queue,
             swapchain,
             depth_texture_view,
-            render_data,
+            // render_data,
             renderer,
+            sb_renderer,
             camera,
             frustum,
             update_mats: false,
@@ -104,15 +107,16 @@ impl Engine {
         // https://github.com/gfx-rs/wgpu-rs/issues/9#issuecomment-494022784
         // https://github.com/gpuweb/gpuweb/pull/509
         // self.render_data.update_view(self.camera.view());
-        if self.update_mats {
-            self.update_mats = false;
-            let temp_buffer = self.device
-                .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
-                .fill_from_slice(&[self.camera.view()]);
-            encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
-        }
+        // if self.update_mats {
+        //     self.update_mats = false;
+        //     let temp_buffer = self.device
+        //         .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
+        //         .fill_from_slice(&[self.camera.view()]);
+        //     encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
+        // }
 
-        self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
+        self.sb_renderer.render(&frame, &mut encoder);
+        // self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
         self.queue.submit(&[encoder.finish()]);
     }
 

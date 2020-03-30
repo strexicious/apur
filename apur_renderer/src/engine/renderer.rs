@@ -1,5 +1,9 @@
 use glam::{Mat4};
 
+mod skybox;
+
+pub use skybox::SkyBoxRenderer;
+
 use super::model::{Vertex, Model};
 
 pub struct RenderData {
@@ -7,7 +11,6 @@ pub struct RenderData {
     bind_group: wgpu::BindGroup,
     texture_binds: Vec<wgpu::BindGroup>,
     uniforms_buffer: wgpu::Buffer,
-    sampler: wgpu::Sampler,
 }
 
 impl RenderData {
@@ -64,7 +67,7 @@ impl RenderData {
             })
         }).collect();
 
-        Self { model, texture_binds, bind_group, uniforms_buffer, sampler }
+        Self { model, texture_binds, bind_group, uniforms_buffer }
     }
 
     pub fn update_view(&mut self, mut view_trans: Mat4) {

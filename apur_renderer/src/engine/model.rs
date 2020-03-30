@@ -8,6 +8,12 @@ pub struct Vertex {
     tex_coords: [f32; 2],
 }
 
+impl Vertex {
+    pub fn new(pos: [f32; 3], tex_coords: [f32; 2]) -> Self {
+        Self { pos, tex_coords }
+    }
+}
+
 pub struct Mesh {
     indices_offset: u32,
     indices_count: u32,
@@ -35,6 +41,7 @@ pub struct Model {
 }
 
 impl Model {
+    
     pub fn load_model(
         device: &wgpu::Device,
         queue: &mut wgpu::Queue,
