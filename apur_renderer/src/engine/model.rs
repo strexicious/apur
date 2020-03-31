@@ -1,23 +1,20 @@
 use std::io::Read;
 use std::fs::File;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Clone, Copy, Default, Debug)]
 #[repr(C)]
 pub struct Vertex {
     pos: [f32; 3],
     tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    pub fn new(pos: [f32; 3], tex_coords: [f32; 2]) -> Self {
-        Self { pos, tex_coords }
-    }
+    normal: [f32; 3],
 }
 
 pub struct Mesh {
     indices_offset: u32,
     indices_count: u32,
-    texture_view: wgpu::TextureView,
+    texture_view: Rc<wgpu::TextureView>,
 }
 
 impl Mesh {    
@@ -62,19 +59,24 @@ impl Model {
         let mut vertices = vec![];
         let mut meshes = vec![];
         
+        let mut texture_cache = HashMap::<String, Rc<wgpu::TextureView>>::new();
         for m in textured_models {
             let vs = m.mesh.positions;
             let ts = m.mesh.texcoords;
+            let ns = m.mesh.normals;
 
             assert_eq!(vs.len() / 3, ts.len() / 2, "positions and texcoords length not same");
+            assert_eq!(vs.len() / 3, ns.len() / 3, "positions and normals length not same");
 
             let vertices_len = vertices.len();
             vertices.extend(vs
                 .chunks(3)
                 .zip(ts.chunks(2))
-                .map(|(vs, ts)| Vertex {
+                .zip(ns.chunks(3))
+                .map(|((vs, ts), ns)| Vertex {
                     pos: [vs[0], vs[1], vs[2]],
                     tex_coords: [ts[0], ts[1]],
+                    normal: [ns[0], ns[1], ns[2]],
                 })
             );
 
@@ -88,24 +90,33 @@ impl Model {
             
             // assumed texture_name includes the "texture/" in path name
             let texture_name = &mats[mat_idx].diffuse_texture;
-            println!("[Info] Loading texture: {}", texture_name);
-            let texture_image = {
-                let mut image_file = File::open(format!("res/models/{}", texture_name)).expect("Failed to open texture image");
-                let mut image_contents = vec![];
-                let _ = image_file.read_to_end(&mut image_contents);
+            let texture_view = if texture_cache.contains_key(texture_name) {
+                texture_cache.get(texture_name).unwrap().clone()
+            } else {
+                println!("[Info] Loading texture: {}", texture_name);
+                let texture_image = {
+                    let mut image_file = File::open(format!("res/models/{}", texture_name)).expect("Failed to open texture image");
+                    let mut image_contents = vec![];
+                    let _ = image_file.read_to_end(&mut image_contents);
+                    
+                    let texture_image = image::load_from_memory(&image_contents)
+                        .or_else(|err| {
+                            if texture_name.ends_with(".tga") {
+                                image::load_from_memory_with_format(&image_contents, image::ImageFormat::TGA)
+                            } else {
+                                Err(err)
+                            }
+                        })
+                        .expect(&format!("failed to load a texture image: {}", texture_name));
+                    texture_image.into_rgba()
+                };
                 
-                let texture_image = image::load_from_memory(&image_contents)
-                    .expect("failed to load a texture image");
-                texture_image.into_rgba()
-            };
-            
-            let texture_extent = wgpu::Extent3d {
-                width: texture_image.width(),
-                height: texture_image.height(),
-                depth: 1,
-            };
-            
-            let texture_view = {
+                let texture_extent = wgpu::Extent3d {
+                    width: texture_image.width(),
+                    height: texture_image.height(),
+                    depth: 1,
+                };
+
                 let texture = device.create_texture(&wgpu::TextureDescriptor {
                     size: texture_extent,
                     array_layer_count: 1,
@@ -139,7 +150,9 @@ impl Model {
                     texture_extent
                 );
 
-                texture.create_default_view()
+                let view = Rc::new(texture.create_default_view());
+                texture_cache.insert(texture_name.to_string(), view.clone());
+                view
             };
         
             meshes.push(Mesh {

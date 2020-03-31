@@ -1,4 +1,4 @@
-use glam::{Mat4};
+use glam::{Mat4, Vec3};
 
 mod skybox;
 
@@ -11,6 +11,7 @@ pub struct RenderData {
     bind_group: wgpu::BindGroup,
     texture_binds: Vec<wgpu::BindGroup>,
     uniforms_buffer: wgpu::Buffer,
+    light_ubo: wgpu::Buffer,
 }
 
 impl RenderData {
@@ -37,6 +38,10 @@ impl RenderData {
         let uniforms_buffer = device
             .create_buffer_mapped(2, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_WRITE)
             .fill_from_slice(&[view_trans, proj_trans]);
+        
+        let light_ubo = device
+            .create_buffer_mapped(1, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_WRITE)
+            .fill_from_slice(&[Vec3::new(0.0, 1.0, 1.0)]);
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: bind_group_layout,
@@ -51,6 +56,13 @@ impl RenderData {
                 wgpu::Binding {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::Binding {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &light_ubo,
+                        range: 0 .. 16,
+                    },
                 },
             ]
         });
@@ -67,7 +79,7 @@ impl RenderData {
             })
         }).collect();
 
-        Self { model, texture_binds, bind_group, uniforms_buffer }
+        Self { model, texture_binds, bind_group, uniforms_buffer, light_ubo }
     }
 
     pub fn update_view(&mut self, mut view_trans: Mat4) {
@@ -109,6 +121,11 @@ impl Renderer {
                     binding: 1,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::Sampler,
+                },
+                wgpu::BindGroupLayoutBinding {
+                    binding: 2,
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                 },
             ]
         });
@@ -177,6 +194,11 @@ impl Renderer {
                         offset: 12,
                         format: wgpu::VertexFormat::Float2,
                         shader_location: 1,
+                    },
+                    wgpu::VertexAttributeDescriptor {
+                        offset: 20,
+                        format: wgpu::VertexFormat::Float3,
+                        shader_location: 2,
                     },
                 ],
             }],
