@@ -210,7 +210,7 @@ impl Renderer {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &frame.view,
                 resolve_target: None,
-                load_op: wgpu::LoadOp::Load,
+                load_op: wgpu::LoadOp::Clear,
                 store_op: wgpu::StoreOp::Store,
                 clear_color: CLEAR_COLOR,
             }],

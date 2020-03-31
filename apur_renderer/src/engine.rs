@@ -6,7 +6,7 @@ mod renderer;
 
 use model::{Model};
 use camera::{Camera, Frustum};
-use renderer::{Renderer, RenderData, SkyBoxRenderer};
+use renderer::{Renderer, RenderData};
 
 pub struct Engine {
     device: wgpu::Device,
@@ -15,7 +15,6 @@ pub struct Engine {
     depth_texture_view: wgpu::TextureView,
     render_data: RenderData,
     renderer: Renderer,
-    sb_renderer: SkyBoxRenderer,
     update_mats: bool,
     camera: Camera,
     frustum: Frustum,
@@ -74,14 +73,6 @@ impl Engine {
             renderer.get_texture_bind_group_layout()
         );
 
-        let sb_renderer = SkyBoxRenderer::new(
-            &device,
-            "tm",
-            &mut queue,
-            camera.view(),
-            frustum.projection(),
-        );
-
         Self {
             device,
             queue,
@@ -89,7 +80,6 @@ impl Engine {
             depth_texture_view,
             render_data,
             renderer,
-            sb_renderer,
             camera,
             frustum,
             update_mats: false,
@@ -119,10 +109,8 @@ impl Engine {
                 .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
                 .fill_from_slice(&[self.camera.view()]);
             encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
-            encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.sb_renderer.get_transforms_buffer(), 0, 64);
         }
 
-        self.sb_renderer.render(&frame, &mut encoder);
         self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
         self.queue.submit(&[encoder.finish()]);
     }
