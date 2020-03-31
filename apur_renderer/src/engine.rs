@@ -13,7 +13,7 @@ pub struct Engine {
     queue: wgpu::Queue,
     swapchain: wgpu::SwapChain,
     depth_texture_view: wgpu::TextureView,
-    // render_data: RenderData,
+    render_data: RenderData,
     renderer: Renderer,
     sb_renderer: SkyBoxRenderer,
     update_mats: bool,
@@ -64,15 +64,15 @@ impl Engine {
         let depth_texture_view = depth_texture.create_default_view();
 
         let renderer = Renderer::new(&device);
-        // let model = Model::load_model(&device, &mut queue, "sponza");
-        // let render_data = RenderData::new(
-        //     &device,
-        //     // model,
-        //     camera.view(),
-        //     frustum.projection(),
-        //     renderer.get_bind_group_layout(),
-        //     renderer.get_texture_bind_group_layout()
-        // );
+        let model = Model::load_model(&device, &mut queue, "sponza");
+        let render_data = RenderData::new(
+            &device,
+            model,
+            camera.view(),
+            frustum.projection(),
+            renderer.get_bind_group_layout(),
+            renderer.get_texture_bind_group_layout()
+        );
 
         let sb_renderer = SkyBoxRenderer::new(
             &device,
@@ -87,7 +87,7 @@ impl Engine {
             queue,
             swapchain,
             depth_texture_view,
-            // render_data,
+            render_data,
             renderer,
             sb_renderer,
             camera,
@@ -118,12 +118,12 @@ impl Engine {
             let temp_buffer = self.device
                 .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
                 .fill_from_slice(&[self.camera.view()]);
-            // encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
+            encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
             encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.sb_renderer.get_transforms_buffer(), 0, 64);
         }
 
         self.sb_renderer.render(&frame, &mut encoder);
-        // self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
+        self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
         self.queue.submit(&[encoder.finish()]);
     }
 
