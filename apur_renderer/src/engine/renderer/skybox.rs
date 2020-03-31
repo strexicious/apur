@@ -1,3 +1,5 @@
+use glam::{Mat4};
+
 use std::io::Read;
 use std::fs::File;
 
@@ -5,6 +7,7 @@ use super::super::model::Vertex;
 
 pub struct SkyBoxRenderer {
     background_plane: wgpu::Buffer,
+    transforms_buffer: wgpu::Buffer,
     cubemap_bind_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
 }
@@ -14,12 +17,14 @@ impl SkyBoxRenderer {
         device: &wgpu::Device,
         cubemap_name: &str,
         queue: &mut wgpu::Queue,
+        view_trans: Mat4,
+        proj_trans: Mat4,
     ) -> Self {
-        let vs_source = include_bytes!("../../../res/shaders/shader.vert.spv");
+        let vs_source = include_bytes!("../../../res/shaders/skybox.vert.spv");
         let vs_module = device.create_shader_module(&wgpu::read_spirv(
             std::io::Cursor::new(&vs_source[..])).expect("failed to read vertex shader spir-v"));
 
-        let fs_source = include_bytes!("../../../res/shaders/shader.frag.spv");
+        let fs_source = include_bytes!("../../../res/shaders/skybox.frag.spv");
         let fs_module = device.create_shader_module(&wgpu::read_spirv(
             std::io::Cursor::new(&fs_source[..])).expect("failed to read fragment shader spir-v"));
 
@@ -28,10 +33,20 @@ impl SkyBoxRenderer {
                 wgpu::BindGroupLayoutBinding {
                     binding: 0,
                     visibility: wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler,
+                },
+                wgpu::BindGroupLayoutBinding {
+                    binding: 1,
+                    visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::SampledTexture {
                         multisampled: false,
                         dimension: wgpu::TextureViewDimension::CubeArray,
                     },
+                },
+                wgpu::BindGroupLayoutBinding {
+                    binding: 2,
+                    visibility: wgpu::ShaderStage::VERTEX,
+                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                 },
             ]
         });
@@ -51,7 +66,7 @@ impl SkyBoxRenderer {
                 entry_point: "main",
             }),
             rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-                front_face: wgpu::FrontFace::Cw,
+                front_face: wgpu::FrontFace::Ccw,
                 cull_mode: wgpu::CullMode::None,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,
@@ -67,18 +82,13 @@ impl SkyBoxRenderer {
             depth_stencil_state: None,
             index_format: wgpu::IndexFormat::Uint32,
             vertex_buffers: &[wgpu::VertexBufferDescriptor {
-                stride: std::mem::size_of::<[f32; 6]>() as u64,
+                stride: std::mem::size_of::<f32>() as u64 * 3,
                 step_mode: wgpu::InputStepMode::Vertex,
                 attributes: &[
                     wgpu::VertexAttributeDescriptor {
                         offset: 0,
                         format: wgpu::VertexFormat::Float3,
                         shader_location: 0,
-                    },
-                    wgpu::VertexAttributeDescriptor {
-                        offset: 12,
-                        format: wgpu::VertexFormat::Float3,
-                        shader_location: 1,
                     },
                 ],
             }],
@@ -139,7 +149,7 @@ impl SkyBoxRenderer {
                 cmd_encoder.copy_buffer_to_texture(
                     wgpu::BufferCopyView {
                         buffer: &cubemap_buf,
-                        offset: (i as u64) * 16 * (cubemap_width as u64) * (cubemap_height as u64),
+                        offset: (i as u64) * 4 * (cubemap_width as u64) * (cubemap_height as u64),
                         row_pitch: 4 * cubemap_width,
                         image_height: cubemap_height,
                     },
@@ -155,33 +165,95 @@ impl SkyBoxRenderer {
 
             texture.create_default_view()
         };
-            
+        
         queue.submit(&[cmd_encoder.finish()]);
 
-        let background_plane_verts = vec![
-            [0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
-            [1.0, 0.0, 0.0, 1.0, 0.0, 1.0],
-            [0.0, 1.0, 0.0, 0.0, 1.0, 1.0],
-            [0.0, 1.0, 0.0, 0.0, 1.0, 1.0],
-            [1.0, 1.0, 0.0, 1.0, 1.0, 1.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+        let background_plane_verts: Vec<f32> = vec![
+            -1.0,  1.0, -1.0,
+            -1.0, -1.0, -1.0,
+             1.0, -1.0, -1.0,
+             1.0, -1.0, -1.0,
+             1.0,  1.0, -1.0,
+            -1.0,  1.0, -1.0,
+        
+            -1.0, -1.0,  1.0,
+            -1.0, -1.0, -1.0,
+            -1.0,  1.0, -1.0,
+            -1.0,  1.0, -1.0,
+            -1.0,  1.0,  1.0,
+            -1.0, -1.0,  1.0,
+        
+             1.0, -1.0, -1.0,
+             1.0, -1.0,  1.0,
+             1.0,  1.0,  1.0,
+             1.0,  1.0,  1.0,
+             1.0,  1.0, -1.0,
+             1.0, -1.0, -1.0,
+        
+            -1.0, -1.0,  1.0,
+            -1.0,  1.0,  1.0,
+             1.0,  1.0,  1.0,
+             1.0,  1.0,  1.0,
+             1.0, -1.0,  1.0,
+            -1.0, -1.0,  1.0,
+        
+            -1.0,  1.0, -1.0,
+             1.0,  1.0, -1.0,
+             1.0,  1.0,  1.0,
+             1.0,  1.0,  1.0,
+            -1.0,  1.0,  1.0,
+            -1.0,  1.0, -1.0,
+        
+            -1.0, -1.0, -1.0,
+            -1.0, -1.0,  1.0,
+             1.0, -1.0, -1.0,
+             1.0, -1.0, -1.0,
+            -1.0, -1.0,  1.0,
+             1.0, -1.0,  1.0,
         ];
         
         let background_plane = device
             .create_buffer_mapped(background_plane_verts.len(), wgpu::BufferUsage::VERTEX)
             .fill_from_slice(&background_plane_verts);
 
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            lod_min_clamp: -100.0,
+            lod_max_clamp: 100.0,
+            compare_function: wgpu::CompareFunction::Always,
+        });
+
+        let transforms_buffer = device
+            .create_buffer_mapped(2, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_WRITE)
+            .fill_from_slice(&[view_trans, proj_trans]);
+
         let cubemap_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &cubemap_bind_group_layout,
             bindings: &[
                 wgpu::Binding {
                     binding: 0,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::Binding {
+                    binding: 1,
                     resource: wgpu::BindingResource::TextureView(&cubemap_view),
-                }
+                },
+                wgpu::Binding {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &transforms_buffer,
+                        range: 0 .. 2 * 64,
+                    },
+                },
             ]
         });
 
-        Self { background_plane, cubemap_bind_group, pipeline }
+        Self { background_plane, cubemap_bind_group, pipeline, transforms_buffer }
     }
 
     pub fn render(&self, frame: &wgpu::SwapChainOutput, cmd_encoder: &mut wgpu::CommandEncoder) {
@@ -199,6 +271,10 @@ impl SkyBoxRenderer {
         rpass.set_bind_group(0, &self.cubemap_bind_group, &[]);
         rpass.set_vertex_buffers(0, &[(&self.background_plane, 0)]);
 
-        rpass.draw(0..6, 0..1);
+        rpass.draw(0..36, 0..1);
+    }
+
+    pub fn get_transforms_buffer(&self) -> &wgpu::Buffer {
+        &self.transforms_buffer
     }
 }

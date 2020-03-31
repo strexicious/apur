@@ -48,7 +48,7 @@ fn main() {
         .build(&event_loop)
         .expect("Error building window");
     window.set_cursor_visible(false);
-    window.set_cursor_grab(true).expect("Couldn't lock the cursor...");
+    // window.set_cursor_grab(true).expect("Couldn't lock the cursor...");
     
     let mut ngn = Engine::new(&window);
     let mut close_request = false;

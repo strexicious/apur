@@ -48,7 +48,7 @@ impl Engine {
         });
 
         let mut camera = Camera::default();
-        camera.move_pos(-5.0);
+        // camera.move_pos(-5.0);
         let frustum = Frustum::new(window_width, window_height);
         
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -74,7 +74,13 @@ impl Engine {
         //     renderer.get_texture_bind_group_layout()
         // );
 
-        let sb_renderer = SkyBoxRenderer::new(&device, "tm", &mut queue);
+        let sb_renderer = SkyBoxRenderer::new(
+            &device,
+            "tm",
+            &mut queue,
+            camera.view(),
+            frustum.projection(),
+        );
 
         Self {
             device,
@@ -107,13 +113,14 @@ impl Engine {
         // https://github.com/gfx-rs/wgpu-rs/issues/9#issuecomment-494022784
         // https://github.com/gpuweb/gpuweb/pull/509
         // self.render_data.update_view(self.camera.view());
-        // if self.update_mats {
-        //     self.update_mats = false;
-        //     let temp_buffer = self.device
-        //         .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
-        //         .fill_from_slice(&[self.camera.view()]);
-        //     encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
-        // }
+        if self.update_mats {
+            self.update_mats = false;
+            let temp_buffer = self.device
+                .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
+                .fill_from_slice(&[self.camera.view()]);
+            // encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
+            encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.sb_renderer.get_transforms_buffer(), 0, 64);
+        }
 
         self.sb_renderer.render(&frame, &mut encoder);
         // self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
