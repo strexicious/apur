@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use winit::{
     event::{Event, WindowEvent, DeviceEvent},
     event_loop::{EventLoop, ControlFlow},
@@ -9,8 +11,7 @@ mod engine;
 
 use engine::{Engine};
 
-fn handle_window_event(ngn: &mut Engine, event: WindowEvent, close_request: &mut bool) {
-    #[allow(clippy::single_match)]
+fn handle_window_event(ngn: &mut Engine, event: WindowEvent, close_request: &mut bool, spf: Duration) {
     match event {
         WindowEvent::CloseRequested => *close_request = true,
         WindowEvent::KeyboardInput { input, .. } => {
@@ -18,6 +19,7 @@ fn handle_window_event(ngn: &mut Engine, event: WindowEvent, close_request: &mut
                 // escape key
                 0x01 => *close_request = true,
                 0x11 | 0x1F => ngn.move_camera(input.scancode == 0x11),
+                0x21 => println!("FPS: {}", 1.0 / spf.as_secs_f32()),
                 _ => { },
             }
         },
@@ -52,12 +54,14 @@ fn main() {
     
     let mut ngn = Engine::new(&window);
     let mut close_request = false;
-    
+    let mut last_tick = Instant::now();
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
+        let cur_tick = Instant::now();
 
         match event {
-            Event::WindowEvent { event, ..} => handle_window_event(&mut ngn, event, &mut close_request),
+            Event::WindowEvent { event, ..} => handle_window_event(&mut ngn, event, &mut close_request, cur_tick - last_tick),
             Event::MainEventsCleared => {
                 if close_request {
                     println!("Shutting down...");
@@ -70,5 +74,6 @@ fn main() {
             Event::DeviceEvent { event, .. } => handle_device_event(&mut ngn, event),
             _ => { }
         }
+        last_tick = cur_tick;
     });
 }

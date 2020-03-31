@@ -47,7 +47,7 @@ impl Engine {
         });
 
         let mut camera = Camera::default();
-        // camera.move_pos(-5.0);
+        camera.move_pos(-5.0);
         let frustum = Frustum::new(window_width, window_height);
         
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
