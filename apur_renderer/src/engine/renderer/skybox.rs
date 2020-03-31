@@ -40,7 +40,7 @@ impl SkyBoxRenderer {
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::SampledTexture {
                         multisampled: false,
-                        dimension: wgpu::TextureViewDimension::CubeArray,
+                        dimension: wgpu::TextureViewDimension::Cube,
                     },
                 },
                 wgpu::BindGroupLayoutBinding {
@@ -163,7 +163,15 @@ impl SkyBoxRenderer {
                 );
             }
 
-            texture.create_default_view()
+            texture.create_view(&wgpu::TextureViewDescriptor {
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                dimension: wgpu::TextureViewDimension::Cube,
+                aspect: wgpu::TextureAspect::default(),
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                array_layer_count: 6,
+            })
         };
         
         queue.submit(&[cmd_encoder.finish()]);

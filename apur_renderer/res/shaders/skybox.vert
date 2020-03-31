@@ -10,6 +10,6 @@ layout(set = 0, binding = 2) uniform Transforms {
 };
 
 void main() {
-    f_tex_coords = position;
+    f_tex_coords = position * vec3(1.0, -1.0, 1.0);
     gl_Position = proj * view * vec4(position, 1.0);
 }
