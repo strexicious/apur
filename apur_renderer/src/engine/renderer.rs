@@ -22,6 +22,7 @@ impl RenderData {
         proj_trans: Mat4,
         bind_group_layout: &wgpu::BindGroupLayout,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
+        light_dir: Vec3,
     ) -> Self {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
@@ -41,7 +42,7 @@ impl RenderData {
         
         let light_ubo = device
             .create_buffer_mapped(1, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_WRITE)
-            .fill_from_slice(&[Vec3::new(0.0, 1.0, 1.0)]);
+            .fill_from_slice(&[light_dir]);
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: bind_group_layout,
@@ -87,6 +88,10 @@ impl RenderData {
             let mapping = map_res.expect("failed to map matrices uniform buffer in update_view");
             mapping.data.copy_from_slice(view_trans.as_mut());
         });
+    }
+
+    pub fn get_light_ubo(&self) -> &wgpu::Buffer {
+        &self.light_ubo
     }
 
     pub fn get_uniforms_buffer(&self) -> &wgpu::Buffer {

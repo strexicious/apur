@@ -1,4 +1,5 @@
 use winit::window::Window;
+use glam::{Vec3};
 
 mod camera;
 mod model;
@@ -8,6 +9,11 @@ use model::{Model};
 use camera::{Camera, Frustum};
 use renderer::{Renderer, RenderData};
 
+#[inline]
+fn angle_to_vec(angle: f32) -> Vec3 {
+    Vec3::new(f32::cos(angle), f32::sin(angle), 0.0)
+}
+
 pub struct Engine {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -16,8 +22,10 @@ pub struct Engine {
     render_data: RenderData,
     renderer: Renderer,
     update_mats: bool,
+    update_light: bool,
     camera: Camera,
     frustum: Frustum,
+    light_dir_angle: f32,
 }
 
 impl Engine {
@@ -70,7 +78,8 @@ impl Engine {
             camera.view(),
             frustum.projection(),
             renderer.get_bind_group_layout(),
-            renderer.get_texture_bind_group_layout()
+            renderer.get_texture_bind_group_layout(),
+            angle_to_vec(0.0),
         );
 
         Self {
@@ -83,6 +92,8 @@ impl Engine {
             camera,
             frustum,
             update_mats: false,
+            update_light: false,
+            light_dir_angle: 0.0,
         }
     }
 
@@ -111,6 +122,14 @@ impl Engine {
             encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
         }
 
+        if self.update_light {
+            self.update_light = false;
+            let temp_buffer = self.device
+                .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
+                .fill_from_slice(&[angle_to_vec(self.light_dir_angle)]);
+            encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_light_ubo(), 0, 16);
+        }
+
         self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
         self.queue.submit(&[encoder.finish()]);
     }
@@ -123,5 +142,14 @@ impl Engine {
     pub fn move_camera(&mut self, forward: bool) {
         self.camera.move_pos(if forward { 1.0 } else { -1.0 } * Self::CAMERA_SPEED);
         self.update_mats = true;
+    }
+
+    pub fn rotate_light(&mut self, right: bool) {
+        if right {
+            self.light_dir_angle += f32::to_radians(1.0);
+        } else {
+            self.light_dir_angle -= f32::to_radians(1.0);
+        }
+        self.update_light = true;
     }
 }
