@@ -1,34 +1,11 @@
-use std::io::Read;
-use std::fs::File;
-use std::collections::HashMap;
-use std::rc::Rc;
-
-#[derive(Clone, Copy, Default, Debug)]
-#[repr(C)]
-pub struct Vertex {
-    pos: [f32; 3],
-    tex_coords: [f32; 2],
-    normal: [f32; 3],
-}
+use super::material::MaterialManager;
 
 pub struct Mesh {
-    indices_offset: u32,
+    vertex_byte_offset: u32,
+    indices_byte_offset: u32,
     indices_count: u32,
-    texture_view: Rc<wgpu::TextureView>,
-}
-
-impl Mesh {    
-    pub fn get_texture_view(&self) -> &wgpu::TextureView {
-        &self.texture_view
-    }
-
-    pub fn get_indices_offset(&self) -> u32 {
-        self.indices_offset
-    }
-
-    pub fn get_indices_count(&self) -> u32 {
-        self.indices_count
-    }
+    mat_name: String,
+    // transform: Mat4,
 }
 
 pub struct Model {
@@ -39,137 +16,54 @@ pub struct Model {
 
 impl Model {
     
-    pub fn load_model(
+    pub fn load_from_obj(
         device: &wgpu::Device,
-        queue: &mut wgpu::Queue,
+        cmd_encoder: &wgpu::CommandEncoder,
         obj_filename: &str,
+        mat_manager: MaterialManager,
     ) -> Self {
         let (models, mats) = tobj::load_obj(format!("res/models/{}.obj", obj_filename).as_ref()).expect("Failed to load the model");
         
-        let mut cmd_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
-        
-        let textured_models = models
-            .into_iter()
-            .filter(|m| {
-                let mat_idx = m.mesh.material_id.expect("no material associated");
-                !mats[mat_idx].diffuse_texture.is_empty()
-            });
         
         let mut indices = vec![];
         let mut vertices = vec![];
         let mut meshes = vec![];
         
-        let mut texture_cache = HashMap::<String, Rc<wgpu::TextureView>>::new();
-        for m in textured_models {
+        for m in models.into_iter() {
             let vs = m.mesh.positions;
             let ts = m.mesh.texcoords;
             let ns = m.mesh.normals;
 
-            assert_eq!(vs.len() / 3, ts.len() / 2, "positions and texcoords length not same");
             assert_eq!(vs.len() / 3, ns.len() / 3, "positions and normals length not same");
 
-            let vertices_len = vertices.len();
-            vertices.extend(vs
-                .chunks(3)
-                .zip(ts.chunks(2))
-                .zip(ns.chunks(3))
-                .map(|((vs, ts), ns)| Vertex {
-                    pos: [vs[0], vs[1], vs[2]],
-                    tex_coords: [ts[0], ts[1]],
-                    normal: [ns[0], ns[1], ns[2]],
-                })
-            );
+            let vertex_byte_offset = vertices.len() as u32 * 4;
+            for i in 0..vs.len() {
+                vertices.extend([vs[i*3], vs[i*3+1], vs[i*3+2]].into_iter());
+                
+                if vs.len() / 3 == ts.len() / 2 {
+                    vertices.extend([ts[i*2], ts[i*2+1]].into_iter());
+                }
 
-            let indices_offset = indices.len() as u32;
+                vertices.extend([ns[i*3], ns[i*3+1], ns[i*3+2]].into_iter());
+            }
+
+            let indices_byte_offset = indices.len() as u32 * 4;
             let indices_count = m.mesh.indices.len() as u32;
             
-            indices.extend(m.mesh.indices.into_iter().map(|idx| idx + vertices_len as u32));
-            
-            let mat_idx = m.mesh.material_id.expect("no material associated");
-            assert!(!mats[mat_idx].diffuse_texture.is_empty(), "diffuse texture path empty");
-            
-            // assumed texture_name includes the "texture/" in path name
-            let texture_name = &mats[mat_idx].diffuse_texture;
-            let texture_view = if texture_cache.contains_key(texture_name) {
-                texture_cache.get(texture_name).unwrap().clone()
-            } else {
-                println!("[Info] Loading texture: {}", texture_name);
-                let texture_image = {
-                    let mut image_file = File::open(format!("res/models/{}", texture_name)).expect("Failed to open texture image");
-                    let mut image_contents = vec![];
-                    let _ = image_file.read_to_end(&mut image_contents);
-                    
-                    let texture_image = image::load_from_memory(&image_contents)
-                        .or_else(|err| {
-                            if texture_name.ends_with(".tga") {
-                                image::load_from_memory_with_format(&image_contents, image::ImageFormat::TGA)
-                            } else {
-                                Err(err)
-                            }
-                        })
-                        .expect(&format!("failed to load a texture image: {}", texture_name));
-                    texture_image.into_rgba()
-                };
-                
-                let texture_extent = wgpu::Extent3d {
-                    width: texture_image.width(),
-                    height: texture_image.height(),
-                    depth: 1,
-                };
-
-                let texture = device.create_texture(&wgpu::TextureDescriptor {
-                    size: texture_extent,
-                    array_layer_count: 1,
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba8Unorm,
-                    usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-                });
-            
-                let image_width = texture_image.width();
-                let image_height = texture_image.height();
-                let image_data = texture_image.into_vec();
-                let image_buf = device
-                    .create_buffer_mapped(image_data.len(), wgpu::BufferUsage::COPY_SRC)
-                    .fill_from_slice(&image_data);
-            
-                cmd_encoder.copy_buffer_to_texture(
-                    wgpu::BufferCopyView {
-                        buffer: &image_buf,
-                        offset: 0,
-                        row_pitch: 4 * image_width,
-                        image_height,
-                    },
-                    wgpu::TextureCopyView {
-                        texture: &texture,
-                        mip_level: 0,
-                        array_layer: 0,
-                        origin: wgpu::Origin3d { x: 0f32, y: 0f32, z: 0f32 },
-                    },
-                    texture_extent
-                );
-
-                let view = Rc::new(texture.create_default_view());
-                texture_cache.insert(texture_name.to_string(), view.clone());
-                view
-            };
+            indices.extend(m.mesh.indices);
         
+            let mat_idx = m.mesh.material_id.expect("no material associated");
+            
             meshes.push(Mesh {
-                indices_offset,
+                vertex_byte_offset,
+                indices_byte_offset,
                 indices_count,
-                texture_view,
+                mat_name: mats[mat_idx].name,
             });
         }
 
-        queue.submit(&[cmd_encoder.finish()]);
-
-        let indices_buffer = device
-            .create_buffer_mapped(indices.len(), wgpu::BufferUsage::INDEX)
-            .fill_from_slice(&indices);
-        let vertex_buffer = device
-            .create_buffer_mapped(vertices.len(), wgpu::BufferUsage::VERTEX)
-            .fill_from_slice(&vertices);
+        let indices_buffer = device.create_buffer_with_data(data: &[u8], usage: BufferUsage);
+        let vertex_buffer = device.create_buffer_with_data(vertices.as_slice(), wgpu::BufferUsage::VERTEX);
         
         Self { indices_buffer, vertex_buffer, meshes }
     }

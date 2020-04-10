@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::Read;
 use std::rc::Rc;
 use std::collections::HashMap;
 
@@ -7,7 +9,7 @@ struct MaterialProps {
 }
 
 struct MaterialMaps {
-    fixed_albedo: (f32, f32, f32),
+    fixed_albedo: [f32; 3],
     specular: Option<Rc<wgpu::TextureView>>,
     diffuse: Option<Rc<wgpu::TextureView>>,
 }
@@ -39,6 +41,54 @@ impl MaterialManager {
             sp_pipe: device.create_render_pipeline(&sp_pipe_descriptor(device)),
             df_pipe: device.create_render_pipeline(&df_pipe_descriptor(device)),
             comb_pipe: device.create_render_pipeline(&comb_pipe_descriptor(device)),
+        }
+    }
+
+    fn add_material(&mut self, device: &wgpu::Device, cmd_encoder: &wgpu::CommandEncoder, mat: tobj::Material) {
+        let specular = None;
+        if !mat.specular_texture.is_empty() {
+            specular = Some(*self.loaded_maps.get(&mat.specular_texture).unwrap_or_else(|| {
+                let tv = load_texture(&device, &cmd_encoder, &mat.specular_texture);
+                self.loaded_maps.insert(mat.specular_texture, tv.clone());
+                &tv
+            }));
+        }
+
+        let diffuse = None;
+        if !mat.diffuse_texture.is_empty() {
+            diffuse = Some(*self.loaded_maps.get(&mat.diffuse_texture).unwrap_or_else(|| {
+                let tv = load_texture(&device, &cmd_encoder, &mat.diffuse_texture);
+                self.loaded_maps.insert(mat.diffuse_texture, tv.clone());
+                &tv
+            }));
+        }
+        
+        let new_mat = Material {
+            mat_props: MaterialProps {
+                metalness: 0.0,
+                roughness: 0.0,
+            },
+            mat_maps: MaterialMaps {
+                fixed_albedo: mat.diffuse,
+                specular,
+                diffuse,
+            },
+        };
+        
+        self.loaded_materials.insert(mat.name, new_mat);
+    }
+
+    fn activate_material<'a>(&'a self, mat_name: &str, rpass: &wgpu::RenderPass<'a>) {
+        let mat = self.loaded_materials.get(mat_name).expect("unknown material was requested");
+        
+        if mat.mat_maps.specular.is_some() && mat.mat_maps.diffuse.is_some() {
+            rpass.set_pipeline(&self.comb_pipe);
+        } else if mat.mat_maps.specular.is_some() {
+            rpass.set_pipeline(&self.sp_pipe);
+        } else if mat.mat_maps.diffuse.is_some() {
+            rpass.set_pipeline(&self.df_pipe);
+        } else {
+            rpass.set_pipeline(&self.fa_pipe);
         }
     }
 }
@@ -517,4 +567,64 @@ fn comb_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor
         sample_mask: !0,
         alpha_to_coverage_enabled: false,
     }
+}
+
+fn load_texture(device: &wgpu::Device, cmd_encoder: &wgpu::CommandEncoder, texture_name: &str) -> Rc<wgpu::TextureView> {
+    println!("[Info] Loading texture: {}", texture_name);
+    let texture_image = {
+        let mut image_file = File::open(format!("res/models/{}", texture_name)).expect("Failed to open texture image");
+        let mut image_contents = vec![];
+        let _ = image_file.read_to_end(&mut image_contents);
+        
+        let texture_image = image::load_from_memory(&image_contents)
+            .or_else(|err| {
+                if texture_name.ends_with(".tga") {
+                    image::load_from_memory_with_format(&image_contents, image::ImageFormat::TGA)
+                } else {
+                    Err(err)
+                }
+            })
+            .expect(&format!("failed to load a texture image: {}", texture_name));
+        texture_image.into_rgba()
+    };
+    
+    let texture_extent = wgpu::Extent3d {
+        width: texture_image.width(),
+        height: texture_image.height(),
+        depth: 1,
+    };
+
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        size: texture_extent,
+        array_layer_count: 1,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+        label: Some(texture_name),
+    });
+
+    let image_width = texture_image.width();
+    let image_height = texture_image.height();
+    let image_data = texture_image.into_vec();
+    let image_buf = device.create_buffer_with_data(image_data.as_slice(), wgpu::BufferUsage::COPY_SRC);
+
+    cmd_encoder.copy_buffer_to_texture(
+        wgpu::BufferCopyView {
+            buffer: &image_buf,
+            offset: 0,
+            bytes_per_row: 4 * 4 * image_width, // four bytes per four floats per #of pixels
+            rows_per_image: image_height,
+        },
+        wgpu::TextureCopyView {
+            texture: &texture,
+            mip_level: 0,
+            array_layer: 0,
+            origin: wgpu::Origin3d::default(),
+        },
+        texture_extent
+    );
+
+    Rc::new(texture.create_default_view())
 }
