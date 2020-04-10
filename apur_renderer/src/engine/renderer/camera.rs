@@ -57,6 +57,16 @@ impl Frustum {
     }
 
     pub fn projection(&self) -> Mat4 {
-        Mat4::perspective_rh_gl(self.fov_y, self.aspect_ratio, self.znear, self.zfar)
+        // this implementation is meant for Vulkan NDC
+        let proj = Mat4::perspective_rh_gl(self.fov_y, self.aspect_ratio, self.znear, self.zfar);
+        
+        let gl2vul_mat = Mat4::from_cols_array(&[
+            1.0,  0.0, 0.0, 0.0,
+            0.0, -1.0, 0.0, 0.0,
+            0.0,  0.0, 0.5, 0.5,
+            0.0,  0.0, 0.0, 1.0,
+        ]);
+        
+        gl2vul_mat * proj
     }
 }

@@ -1,12 +1,12 @@
 use winit::window::Window;
 use glam::{Vec3};
 
-mod camera;
 mod model;
 mod renderer;
+mod material;
 
 use model::{Model};
-use camera::{Camera, Frustum};
+use renderer::camera::{Camera, Frustum};
 use renderer::{Renderer, RenderData};
 
 #[inline]
@@ -18,19 +18,14 @@ pub struct Engine {
     device: wgpu::Device,
     queue: wgpu::Queue,
     swapchain: wgpu::SwapChain,
-    depth_texture_view: wgpu::TextureView,
-    render_data: RenderData,
     renderer: Renderer,
-    update_mats: bool,
-    update_light: bool,
-    camera: Camera,
-    frustum: Frustum,
-    light_dir_angle: f32,
+    scene_manager: SceneManager,
+    material_manager: MaterialManager,
 }
 
 impl Engine {
 
-    const CAMERA_SPEED: f32 = 0.1;
+    const CAMERA_SPEED: f32 = 0.5;
     
     pub fn new(window: &Window) -> Self {
         let window_width = window.inner_size().width;
@@ -54,46 +49,11 @@ impl Engine {
             present_mode: wgpu::PresentMode::Vsync,
         });
 
-        let mut camera = Camera::default();
-        camera.move_pos(-5.0);
-        let frustum = Frustum::new(window_width, window_height);
-        
-        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d { width: window_width, height: window_height, depth: 1, },
-            array_layer_count: 1,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-        });
-
-        let depth_texture_view = depth_texture.create_default_view();
-
-        let renderer = Renderer::new(&device);
-        let model = Model::load_model(&device, &mut queue, "sponza");
-        let render_data = RenderData::new(
-            &device,
-            model,
-            camera.view(),
-            frustum.projection(),
-            renderer.get_bind_group_layout(),
-            renderer.get_texture_bind_group_layout(),
-            angle_to_vec(0.0),
-        );
-
         Self {
             device,
             queue,
             swapchain,
-            depth_texture_view,
-            render_data,
             renderer,
-            camera,
-            frustum,
-            update_mats: false,
-            update_light: false,
-            light_dir_angle: 0.0,
         }
     }
 
