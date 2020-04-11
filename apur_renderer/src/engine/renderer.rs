@@ -1,11 +1,17 @@
-mod camera;
+pub mod camera;
+pub mod light;
 
 use camera::{Camera, Frustum};
+use light::{Light};
+
+use super::model::Scene;
+use super::material::MaterialManager;
 
 pub struct Renderer {
     ds_texture: wgpu::TextureView,
     camera: Camera,
     frustum: Frustum,
+    lights: Vec<Light>,
     // environment: Environment,
 }
 
@@ -30,15 +36,17 @@ impl Renderer {
             ds_texture: depth_texture.create_default_view(),
             camera: Camera::default(),
             frustum: Frustum::new(width, height),
+            lights: vec![],
         }
     }
 
     pub fn render(
         &self,
         frame: &wgpu::SwapChainOutput,
+        device: &wgpu::Device,
         cmd_encoder: &mut wgpu::CommandEncoder,
-        scene_manager: SceneManager,
-        material_manager: MaterialManager,
+        scene: &Scene,
+        mat_man: &MaterialManager,
     ) {
         // material can be an enum
         // foreach material in material manager:

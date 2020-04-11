@@ -1,4 +1,9 @@
+use zerocopy::{AsBytes};
 use super::material::MaterialManager;
+
+// pub trait Vertex {
+//     fn state_desc() -> wgpu::VertexStateDescriptor<'static>;
+// }
 
 pub struct Mesh {
     vertex_byte_offset: u32,
@@ -8,25 +13,26 @@ pub struct Mesh {
     // transform: Mat4,
 }
 
-pub struct Model {
+struct Model {
     vertex_buffer: wgpu::Buffer,
     indices_buffer: wgpu::Buffer,
     meshes: Vec<Mesh>,
 }
 
 impl Model {
-    
-    pub fn load_from_obj(
+    fn load_from_obj(
         device: &wgpu::Device,
-        cmd_encoder: &wgpu::CommandEncoder,
+        cmd_encoder: &mut wgpu::CommandEncoder,
         obj_filename: &str,
-        mat_manager: MaterialManager,
+        mat_manager: &mut MaterialManager,
     ) -> Self {
         let (models, mats) = tobj::load_obj(format!("res/models/{}.obj", obj_filename).as_ref()).expect("Failed to load the model");
-        
+        for mat in mats.iter() {
+            mat_manager.add_material(device, cmd_encoder, mat);
+        }
         
         let mut indices = vec![];
-        let mut vertices = vec![];
+        let mut vertices: Vec<f32> = vec![];
         let mut meshes = vec![];
         
         for m in models.into_iter() {
@@ -58,25 +64,37 @@ impl Model {
                 vertex_byte_offset,
                 indices_byte_offset,
                 indices_count,
-                mat_name: mats[mat_idx].name,
+                mat_name: mats[mat_idx].name.clone(),
             });
         }
 
-        let indices_buffer = device.create_buffer_with_data(data: &[u8], usage: BufferUsage);
-        let vertex_buffer = device.create_buffer_with_data(vertices.as_slice(), wgpu::BufferUsage::VERTEX);
+        let indices_buffer = device.create_buffer_with_data(indices.as_bytes(), wgpu::BufferUsage::INDEX);
+        let vertex_buffer = device.create_buffer_with_data(vertices.as_bytes(), wgpu::BufferUsage::VERTEX);
         
         Self { indices_buffer, vertex_buffer, meshes }
     }
 
-    pub fn get_indices_buffer(&self) -> &wgpu::Buffer {
+    fn get_indices_buffer(&self) -> &wgpu::Buffer {
         &self.indices_buffer
     }
 
-    pub fn get_vertex_buffer(&self) -> &wgpu::Buffer {
+    fn get_vertex_buffer(&self) -> &wgpu::Buffer {
         &self.vertex_buffer
     }
 
-    pub fn get_meshes(&self) -> &[Mesh] {
+    fn get_meshes(&self) -> &[Mesh] {
         &self.meshes
+    }
+}
+
+pub struct Scene {
+    models: Vec<Model>,
+}
+
+impl Default for Scene {
+    fn default() -> Self {
+        Self {
+            models: vec![]
+        }
     }
 }

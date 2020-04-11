@@ -3,6 +3,21 @@ use std::io::Read;
 use std::rc::Rc;
 use std::collections::HashMap;
 
+// Maybe we can define a trait that will represent the dependece of
+// a material on a vertex structure but at the same time will
+// will result in a product that would be the pipeline, something like
+// trait Material {
+//     // Vertex would have declare an associated method
+//     // that returns the vertex state for our pipeline
+//     type VertexType: Vertex;
+
+//     fn get_pipeline(&self) -> &wgpu::RenderPipeline;
+// }
+// we will also need to figure out a good way to store references to our models
+// so we can efficiently manually bind the pipeline only once for each material
+// type and then render the referenced models in the same subpass, maybe
+// when creating the material, also pass in the mess to the manager which does the desired
+
 struct MaterialProps {
     metalness: f32,
     roughness: f32,
@@ -14,7 +29,7 @@ struct MaterialMaps {
     diffuse: Option<Rc<wgpu::TextureView>>,
 }
 
-pub struct Material {
+struct Material {
     mat_props: MaterialProps,
     mat_maps: MaterialMaps,
 }
@@ -33,34 +48,48 @@ pub struct MaterialManager {
 }
 
 impl MaterialManager {
-    fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device) -> Self {
         Self {
             loaded_maps: HashMap::new(),
             loaded_materials: HashMap::new(),
-            fa_pipe: device.create_render_pipeline(&fa_pipe_descriptor(device)),
-            sp_pipe: device.create_render_pipeline(&sp_pipe_descriptor(device)),
-            df_pipe: device.create_render_pipeline(&df_pipe_descriptor(device)),
-            comb_pipe: device.create_render_pipeline(&comb_pipe_descriptor(device)),
+            fa_pipe: fa_pipeline(device),
+            sp_pipe: sp_pipeline(device),
+            df_pipe: df_pipeline(device),
+            comb_pipe: comb_pipeline(device),
         }
     }
 
-    fn add_material(&mut self, device: &wgpu::Device, cmd_encoder: &wgpu::CommandEncoder, mat: tobj::Material) {
-        let specular = None;
+    pub fn add_material(&mut self, device: &wgpu::Device, cmd_encoder: &mut wgpu::CommandEncoder, mat: &tobj::Material) {
+        let mut specular = None;
         if !mat.specular_texture.is_empty() {
-            specular = Some(*self.loaded_maps.get(&mat.specular_texture).unwrap_or_else(|| {
-                let tv = load_texture(&device, &cmd_encoder, &mat.specular_texture);
-                self.loaded_maps.insert(mat.specular_texture, tv.clone());
-                &tv
-            }));
+            let mut should_update = false;
+            specular = Some(self.loaded_maps.get(&mat.specular_texture).map_or_else(
+                || {
+                    should_update = true;
+                    load_texture(device, cmd_encoder, &mat.specular_texture)
+                },
+                |tv| { tv.clone() }
+            ));
+
+            if should_update {
+                self.loaded_maps.insert(mat.specular_texture.clone(), specular.as_ref().unwrap().clone());
+            }
         }
 
-        let diffuse = None;
+        let mut diffuse = None;
         if !mat.diffuse_texture.is_empty() {
-            diffuse = Some(*self.loaded_maps.get(&mat.diffuse_texture).unwrap_or_else(|| {
-                let tv = load_texture(&device, &cmd_encoder, &mat.diffuse_texture);
-                self.loaded_maps.insert(mat.diffuse_texture, tv.clone());
-                &tv
-            }));
+            let mut should_update = false;
+            diffuse = Some(self.loaded_maps.get(&mat.diffuse_texture).map_or_else(
+                || {
+                    should_update = true;
+                    load_texture(device, cmd_encoder, &mat.diffuse_texture)
+                },
+                |tv| { tv.clone() }
+            ));
+
+            if should_update {
+                self.loaded_maps.insert(mat.diffuse_texture.clone(), diffuse.as_ref().unwrap().clone());
+            }
         }
         
         let new_mat = Material {
@@ -75,10 +104,10 @@ impl MaterialManager {
             },
         };
         
-        self.loaded_materials.insert(mat.name, new_mat);
+        self.loaded_materials.insert(mat.name.clone(), new_mat);
     }
 
-    fn activate_material<'a>(&'a self, mat_name: &str, rpass: &wgpu::RenderPass<'a>) {
+    fn activate_material<'a>(&'a self, mat_name: &str, rpass: &mut wgpu::RenderPass<'a>) {
         let mat = self.loaded_materials.get(mat_name).expect("unknown material was requested");
         
         if mat.mat_maps.specular.is_some() && mat.mat_maps.diffuse.is_some() {
@@ -93,7 +122,7 @@ impl MaterialManager {
     }
 }
 
-fn fa_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor {
+fn fa_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
     let draw_call_bg_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         bindings: &[
             // projection view matrix data
@@ -136,7 +165,7 @@ fn fa_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor {
     let fmodule = device.create_shader_module(&wgpu::read_spirv(
         std::io::Cursor::new(&fshader[..])).expect("failed to read fa_pipe fragment shader spir-v"));
 
-    wgpu::RenderPipelineDescriptor {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
         vertex_stage: wgpu::ProgrammableStageDescriptor {
             module: &vmodule,
@@ -193,10 +222,10 @@ fn fa_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor {
         sample_count: 1,
         sample_mask: !0,
         alpha_to_coverage_enabled: false,
-    }
+    })
 }
 
-fn sp_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor {
+fn sp_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
     let draw_call_bg_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         bindings: &[
             // projection view matrix data
@@ -251,7 +280,7 @@ fn sp_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor {
     let fmodule = device.create_shader_module(&wgpu::read_spirv(
         std::io::Cursor::new(&fshader[..])).expect("failed to read sp_pipe fragment shader spir-v"));
 
-    wgpu::RenderPipelineDescriptor {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
         vertex_stage: wgpu::ProgrammableStageDescriptor {
             module: &vmodule,
@@ -314,10 +343,10 @@ fn sp_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor {
         sample_count: 1,
         sample_mask: !0,
         alpha_to_coverage_enabled: false,
-    }
+    })
 }
 
-fn df_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor {
+fn df_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
     let draw_call_bg_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         bindings: &[
             // projection view matrix data
@@ -372,7 +401,7 @@ fn df_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor {
     let fmodule = device.create_shader_module(&wgpu::read_spirv(
         std::io::Cursor::new(&fshader[..])).expect("failed to read df_pipe fragment shader spir-v"));
 
-    wgpu::RenderPipelineDescriptor {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
         vertex_stage: wgpu::ProgrammableStageDescriptor {
             module: &vmodule,
@@ -435,10 +464,10 @@ fn df_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor {
         sample_count: 1,
         sample_mask: !0,
         alpha_to_coverage_enabled: false,
-    }
+    })
 }
 
-fn comb_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor {
+fn comb_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
     let draw_call_bg_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         bindings: &[
             // projection view matrix data
@@ -503,7 +532,7 @@ fn comb_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor
     let fmodule = device.create_shader_module(&wgpu::read_spirv(
         std::io::Cursor::new(&fshader[..])).expect("failed to read comb_pipe fragment shader spir-v"));
 
-    wgpu::RenderPipelineDescriptor {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
         vertex_stage: wgpu::ProgrammableStageDescriptor {
             module: &vmodule,
@@ -566,10 +595,10 @@ fn comb_pipe_descriptor(device: &wgpu::Device) -> wgpu::RenderPipelineDescriptor
         sample_count: 1,
         sample_mask: !0,
         alpha_to_coverage_enabled: false,
-    }
+    })
 }
 
-fn load_texture(device: &wgpu::Device, cmd_encoder: &wgpu::CommandEncoder, texture_name: &str) -> Rc<wgpu::TextureView> {
+fn load_texture(device: &wgpu::Device, cmd_encoder: &mut wgpu::CommandEncoder, texture_name: &str) -> Rc<wgpu::TextureView> {
     println!("[Info] Loading texture: {}", texture_name);
     let texture_image = {
         let mut image_file = File::open(format!("res/models/{}", texture_name)).expect("Failed to open texture image");

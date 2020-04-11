@@ -4,10 +4,11 @@ use glam::{Vec3};
 mod model;
 mod renderer;
 mod material;
+mod buffer;
 
-use model::{Model};
-use renderer::camera::{Camera, Frustum};
-use renderer::{Renderer, RenderData};
+use model::{Scene};
+use renderer::{Renderer, camera::{Camera, Frustum}};
+use material::MaterialManager;
 
 #[inline]
 fn angle_to_vec(angle: f32) -> Vec3 {
@@ -19,8 +20,8 @@ pub struct Engine {
     queue: wgpu::Queue,
     swapchain: wgpu::SwapChain,
     renderer: Renderer,
-    scene_manager: SceneManager,
-    material_manager: MaterialManager,
+    scene: Scene,
+    mat_man: MaterialManager,
 }
 
 impl Engine {
@@ -31,14 +32,18 @@ impl Engine {
         let window_width = window.inner_size().width;
         let window_height = window.inner_size().height;
         
-        let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
-            backends: wgpu::BackendBit::PRIMARY,
-        }).expect("Couldn't get hardware adapter");
-        let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
+        let surface = wgpu::Surface::create(window);
+        let adapter = pollster::block_on(wgpu::Adapter::request(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::Default,
+                compatible_surface: Some(&surface),
+            },
+            wgpu::BackendBit::PRIMARY,
+        )).expect("Couldn't get hardware adapter");
+        let (device, mut queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             extensions: wgpu::Extensions::default(),
             limits: wgpu::Limits::default(),
-        });
+        }));
         
         let surface = wgpu::Surface::create(window);
         let swapchain = device.create_swap_chain(&surface, &wgpu::SwapChainDescriptor {
@@ -46,20 +51,26 @@ impl Engine {
             format: wgpu::TextureFormat::Bgra8UnormSrgb,
             width: window_width,
             height: window_height,
-            present_mode: wgpu::PresentMode::Vsync,
+            present_mode: wgpu::PresentMode::Mailbox,
         });
 
+        let renderer = Renderer::new(&device, window_width, window_height);
+        let mat_man = MaterialManager::new(&device);
+        let scene = Scene::default();
+        
         Self {
             device,
             queue,
             swapchain,
             renderer,
+            mat_man,
+            scene,
         }
     }
 
     pub fn render(&mut self) {
         let frame = self.swapchain.get_next_texture();
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render") });
         
         // TODO: maybe get RenderData::update_view working...
         // ... ok so after a little backtracking and talking, update_view sets a write pending,
@@ -74,42 +85,42 @@ impl Engine {
         // https://github.com/gfx-rs/wgpu-rs/issues/9#issuecomment-494022784
         // https://github.com/gpuweb/gpuweb/pull/509
         // self.render_data.update_view(self.camera.view());
-        if self.update_mats {
-            self.update_mats = false;
-            let temp_buffer = self.device
-                .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
-                .fill_from_slice(&[self.camera.view()]);
-            encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
-        }
+        // if self.update_mats {
+        //     self.update_mats = false;
+        //     let temp_buffer = self.device
+        //         .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
+        //         .fill_from_slice(&[self.camera.view()]);
+        //     encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
+        // }
 
-        if self.update_light {
-            self.update_light = false;
-            let temp_buffer = self.device
-                .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
-                .fill_from_slice(&[angle_to_vec(self.light_dir_angle)]);
-            encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_light_ubo(), 0, 16);
-        }
+        // if self.update_light {
+        //     self.update_light = false;
+        //     let temp_buffer = self.device
+        //         .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
+        //         .fill_from_slice(&[angle_to_vec(self.light_dir_angle)]);
+        //     encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_light_ubo(), 0, 16);
+        // }
 
-        self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
-        self.queue.submit(&[encoder.finish()]);
+        // self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
+        // self.queue.submit(&[encoder.finish()]);
     }
 
     pub fn handle_mouse_move(&mut self, dx: f64, dy: f64) {
-        self.camera.change_angle(dx as f32, dy as f32);
-        self.update_mats = true;
+        // self.camera.change_angle(dx as f32, dy as f32);
+        // self.update_mats = true;
     }
 
     pub fn move_camera(&mut self, forward: bool) {
-        self.camera.move_pos(if forward { 1.0 } else { -1.0 } * Self::CAMERA_SPEED);
-        self.update_mats = true;
+        // self.camera.move_pos(if forward { 1.0 } else { -1.0 } * Self::CAMERA_SPEED);
+        // self.update_mats = true;
     }
 
     pub fn rotate_light(&mut self, right: bool) {
-        if right {
-            self.light_dir_angle += f32::to_radians(1.0);
-        } else {
-            self.light_dir_angle -= f32::to_radians(1.0);
-        }
-        self.update_light = true;
+        // if right {
+        //     self.light_dir_angle += f32::to_radians(1.0);
+        // } else {
+        //     self.light_dir_angle -= f32::to_radians(1.0);
+        // }
+        // self.update_light = true;
     }
 }
