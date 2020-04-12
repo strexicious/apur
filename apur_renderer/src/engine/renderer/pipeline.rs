@@ -13,11 +13,10 @@ impl Pipeline {
         shader_source: (&[u8], &[u8]),
         global_layout: &wgpu::BindGroupLayoutDescriptor,
         global_bindings: &[wgpu::Binding],
-        mat_layout: &wgpu::BindGroupLayoutDescriptor,
+        mat_layout: &wgpu::BindGroupLayout,
         vertex_state: &wgpu::VertexStateDescriptor,
     ) -> Self {
         let global_layout = device.create_bind_group_layout(global_layout);
-        let mat_layout = device.create_bind_group_layout(mat_layout);
     
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[&global_layout, &mat_layout],

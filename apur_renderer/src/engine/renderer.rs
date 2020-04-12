@@ -31,6 +31,7 @@ impl Renderer {
         device: &wgpu::Device,
         width: u32,
         height: u32,
+        mat_man: &MaterialManager,
     ) -> Self {
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d { width, height, depth: 1, },
@@ -50,7 +51,7 @@ impl Renderer {
         transforms_data.extend(frustum.projection().as_ref());
 
         let transforms = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &transforms_data);
-        let lights_buf = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &[0f32, 0f32, 0f32]);
+        let lights_buf = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &[0f32, -1f32, 0f32]);
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
@@ -113,7 +114,7 @@ impl Renderer {
                 FAMaterial::SHADERS_SOURCE,
                 &FAMaterial::GLOBAL_BG_LAYOUT,
                 gb1,
-                &FAMaterial::MATERIAL_BG_LAYOUT,
+                mat_man.fa_mat_bg_layout(),
                 &FAMaterial::VERTEX_STATE,
             ),
             sp_pipe: Pipeline::new(
@@ -121,7 +122,7 @@ impl Renderer {
                 SPMaterial::SHADERS_SOURCE,
                 &SPMaterial::GLOBAL_BG_LAYOUT,
                 gb2,
-                &SPMaterial::MATERIAL_BG_LAYOUT,
+                mat_man.sp_mat_bg_layout(),
                 &SPMaterial::VERTEX_STATE,
             ),
             df_pipe: Pipeline::new(
@@ -129,7 +130,7 @@ impl Renderer {
                 DFMaterial::SHADERS_SOURCE,
                 &DFMaterial::GLOBAL_BG_LAYOUT,
                 gb2,
-                &DFMaterial::MATERIAL_BG_LAYOUT,
+                mat_man.df_mat_bg_layout(),
                 &DFMaterial::VERTEX_STATE,
             ),
             comb_pipe: Pipeline::new(
@@ -137,7 +138,7 @@ impl Renderer {
                 CombinedMaterial::SHADERS_SOURCE,
                 &CombinedMaterial::GLOBAL_BG_LAYOUT,
                 gb2,
-                &CombinedMaterial::MATERIAL_BG_LAYOUT,
+                mat_man.comb_mat_bg_layout(),
                 &CombinedMaterial::VERTEX_STATE,
             ),
 

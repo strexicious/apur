@@ -48,34 +48,32 @@ impl Scene {
         let mut meshes = vec![];
         
         for m in models.into_iter() {
-            let mut indices = vec![];
-            let mut vertices: Vec<f32> = vec![];
-
             let vs = m.mesh.positions;
             let ts = m.mesh.texcoords;
             let ns = m.mesh.normals;
 
             assert_eq!(vs.len() / 3, ns.len() / 3, "positions and normals length not same");
-
-            for i in 0..(vs.len() / 3) {
-                vertices.extend([vs[i*3], vs[i*3+1], vs[i*3+2]].into_iter());
-                
-                if vs.len() / 3 == ts.len() / 2 {
-                    vertices.extend([ts[i*2], ts[i*2+1]].into_iter());
-                }
-
-                vertices.extend([ns[i*3], ns[i*3+1], ns[i*3+2]].into_iter());
-            }
-
-            let indices_count = m.mesh.indices.len() as u32;
+         
+            let mut vertices = vec![];
             
-            indices.extend(m.mesh.indices);
-        
-            let mat_idx = m.mesh.material_id.expect("no material associated");
+            if vs.len() / 3 == ts.len() / 2 {
+                vs.chunks(3).zip(ts.chunks(2)).zip(ns.chunks(3)).for_each(|((vs, ts), ns)| {
+                    vertices.extend(vs);
+                    vertices.extend(ts);
+                    vertices.extend(ns);
+                });
+            } else {
+                vs.chunks(3).zip(ns.chunks(2)).for_each(|(vs, ns)| {
+                    vertices.extend(vs);
+                    vertices.extend(ns);
+                });
+            };
             
-            let indices_buffer = ManagedBuffer::from_u32_data(device, wgpu::BufferUsage::INDEX, &indices);
+            let indices_buffer = ManagedBuffer::from_u32_data(device, wgpu::BufferUsage::INDEX, &m.mesh.indices);
             let vertex_buffer = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::VERTEX, &vertices);
 
+            let mat_idx = m.mesh.material_id.expect("no material associated");
+            let indices_count = m.mesh.indices.len() as u32;
             meshes.push(Mesh {
                 indices_buffer,
                 vertex_buffer,

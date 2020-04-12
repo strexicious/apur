@@ -36,12 +36,11 @@ pub struct FAMaterial {
 }
 
 impl FAMaterial {
-    fn new(device: &wgpu::Device, albedo: [f32; 3]) -> Self {
+    fn new(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, albedo: [f32; 3]) -> Self {
         let albedo_buf = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &albedo[..]);
         
-        let layout = device.create_bind_group_layout(&Self::MATERIAL_BG_LAYOUT);
         let mat_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &layout,
+            layout: layout,
             bindings: &[
                 wgpu::Binding {
                     binding: 0,
@@ -129,10 +128,9 @@ pub struct SPMaterial {
 }
 
 impl SPMaterial {
-    fn new(device: &wgpu::Device, albedo: [f32; 3], specular: Rc<wgpu::TextureView>) -> Self {
+    fn new(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, albedo: [f32; 3], specular: Rc<wgpu::TextureView>) -> Self {
         let albedo_buf = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &albedo[..]);
         
-        let layout = device.create_bind_group_layout(&Self::MATERIAL_BG_LAYOUT);
         let mat_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &layout,
             bindings: &[
@@ -217,7 +215,7 @@ impl SPMaterial {
     pub const VERTEX_STATE: wgpu::VertexStateDescriptor<'static> = wgpu::VertexStateDescriptor {
         index_format: wgpu::IndexFormat::Uint32,
         vertex_buffers: &[wgpu::VertexBufferDescriptor {
-            stride: 36,
+            stride: 32,
             step_mode: wgpu::InputStepMode::Vertex,
             attributes: &[
                 // position
@@ -251,10 +249,9 @@ pub struct DFMaterial {
 }
 
 impl DFMaterial {
-    fn new(device: &wgpu::Device, albedo: [f32; 3], diffuse: Rc<wgpu::TextureView>) -> Self {
+    fn new(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, albedo: [f32; 3], diffuse: Rc<wgpu::TextureView>) -> Self {
         let albedo_buf = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &albedo[..]);
         
-        let layout = device.create_bind_group_layout(&Self::MATERIAL_BG_LAYOUT);
         let mat_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &layout,
             bindings: &[
@@ -339,7 +336,7 @@ impl DFMaterial {
     pub const VERTEX_STATE: wgpu::VertexStateDescriptor<'static> = wgpu::VertexStateDescriptor {
         index_format: wgpu::IndexFormat::Uint32,
         vertex_buffers: &[wgpu::VertexBufferDescriptor {
-            stride: 36,
+            stride: 32,
             step_mode: wgpu::InputStepMode::Vertex,
             attributes: &[
                 // position
@@ -374,10 +371,9 @@ pub struct CombinedMaterial {
 }
 
 impl CombinedMaterial {
-    fn new(device: &wgpu::Device, albedo: [f32; 3], specular: Rc<wgpu::TextureView>, diffuse: Rc<wgpu::TextureView>) -> Self {
+    fn new(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, albedo: [f32; 3], specular: Rc<wgpu::TextureView>, diffuse: Rc<wgpu::TextureView>) -> Self {
         let albedo_buf = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &albedo[..]);
         
-        let layout = device.create_bind_group_layout(&Self::MATERIAL_BG_LAYOUT);
         let mat_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &layout,
             bindings: &[
@@ -477,7 +473,7 @@ impl CombinedMaterial {
     pub const VERTEX_STATE: wgpu::VertexStateDescriptor<'static> = wgpu::VertexStateDescriptor {
         index_format: wgpu::IndexFormat::Uint32,
         vertex_buffers: &[wgpu::VertexBufferDescriptor {
-            stride: 36,
+            stride: 32,
             step_mode: wgpu::InputStepMode::Vertex,
             attributes: &[
                 // position
@@ -506,6 +502,11 @@ impl CombinedMaterial {
 pub struct MaterialManager {
     loaded_maps: HashMap<String, Rc<wgpu::TextureView>>,
     loaded_materials: HashMap<String, Material>,
+
+    fa_mat_bg_lay: wgpu::BindGroupLayout,
+    sp_mat_bg_lay: wgpu::BindGroupLayout,
+    df_mat_bg_lay: wgpu::BindGroupLayout,
+    comb_mat_bg_lay: wgpu::BindGroupLayout,
 }
 
 impl MaterialManager {
@@ -513,6 +514,10 @@ impl MaterialManager {
         Self {
             loaded_maps: HashMap::new(),
             loaded_materials: HashMap::new(),
+            fa_mat_bg_lay: device.create_bind_group_layout(&FAMaterial::MATERIAL_BG_LAYOUT),
+            sp_mat_bg_lay: device.create_bind_group_layout(&SPMaterial::MATERIAL_BG_LAYOUT),
+            df_mat_bg_lay: device.create_bind_group_layout(&DFMaterial::MATERIAL_BG_LAYOUT),
+            comb_mat_bg_lay: device.create_bind_group_layout(&CombinedMaterial::MATERIAL_BG_LAYOUT),
         }
     }
 
@@ -550,10 +555,10 @@ impl MaterialManager {
         }
         
         let matt = match (specular, diffuse) {
-            (None, None) => Material::FA(FAMaterial::new(device, mat.diffuse)),
-            (Some(tvsp), None) => Material::SP(SPMaterial::new(device, mat.diffuse, tvsp)),
-            (None, Some(tvdf)) => Material::DF(DFMaterial::new(device, mat.diffuse, tvdf)),
-            (Some(tvsp), Some(tvdf)) => Material::COMB(CombinedMaterial::new(device, mat.diffuse, tvsp, tvdf)),
+            (None, None) => Material::FA(FAMaterial::new(device, &self.fa_mat_bg_lay, mat.diffuse)),
+            (Some(tvsp), None) => Material::SP(SPMaterial::new(device, &self.sp_mat_bg_lay, mat.diffuse, tvsp)),
+            (None, Some(tvdf)) => Material::DF(DFMaterial::new(device, &self.df_mat_bg_lay, mat.diffuse, tvdf)),
+            (Some(tvsp), Some(tvdf)) => Material::COMB(CombinedMaterial::new(device, &self.comb_mat_bg_lay, mat.diffuse, tvsp, tvdf)),
         };
 
         self.loaded_materials.insert(mat.name.clone(), matt);
@@ -561,6 +566,22 @@ impl MaterialManager {
 
     pub fn get_material(&self, name: &str) -> Option<&Material> {
         self.loaded_materials.get(name)
+    }
+
+    pub fn fa_mat_bg_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.fa_mat_bg_lay
+    }
+
+    pub fn sp_mat_bg_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.sp_mat_bg_lay
+    }
+
+    pub fn df_mat_bg_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.df_mat_bg_lay
+    }
+
+    pub fn comb_mat_bg_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.comb_mat_bg_lay
     }
 }
 
@@ -609,7 +630,7 @@ fn load_texture(device: &wgpu::Device, cmd_encoder: &mut wgpu::CommandEncoder, t
         wgpu::BufferCopyView {
             buffer: &image_buf,
             offset: 0,
-            bytes_per_row: 4 * 4 * image_width, // four bytes per four floats per #of pixels
+            bytes_per_row: 4 * image_width, // four bytes per four floats per #of pixels
             rows_per_image: image_height,
         },
         wgpu::TextureCopyView {

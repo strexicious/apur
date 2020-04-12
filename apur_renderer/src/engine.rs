@@ -57,15 +57,16 @@ impl Engine {
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("engine start") });
         
+        let mut mat_man = MaterialManager::new(&device);
         let mut renderer = Renderer::new(
             &device,
             window_width,
             window_height,
+            &mat_man,
         );
         
-        let mut mat_man = MaterialManager::new(&device);
         let mut scene = Scene::default();
-        scene.load_from_obj(&device, &mut encoder, "plane", &mut mat_man, &mut renderer);
+        scene.load_from_obj(&device, &mut encoder, "sponza", &mut mat_man, &mut renderer);
 
         queue.submit(&[encoder.finish()]);
         
