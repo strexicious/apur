@@ -1,6 +1,6 @@
 # Blender v2.74 (sub 0) OBJ File: 'Transport Shuttle_Blender Game Engine_blend.blend'
 # www.blender.org
-mtllib Transport Shuttle_obj.mtl
+mtllib Transport_Shuttle_obj.mtl
 o Shuttle.015_Cube.014
 v -4.125158 0.423485 0.122985
 v -4.259615 0.423587 0.123439

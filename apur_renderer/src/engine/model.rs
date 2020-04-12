@@ -1,5 +1,5 @@
 use zerocopy::{AsBytes};
-use super::material::MaterialManager;
+use super::material::{MaterialManager, Material};
 use super::renderer::Renderer;
 use super::buffer::ManagedBuffer;
 
@@ -52,18 +52,24 @@ impl Scene {
             let ts = m.mesh.texcoords;
             let ns = m.mesh.normals;
 
+            let mat_idx = m.mesh.material_id.expect("no material associated");
+            let mat_name = mats[mat_idx].name.clone();
+
+            let needs_tcoords = if let Material::FA(_) = mat_manager.get_material(&mat_name).unwrap() { false } else { true };
+
             assert_eq!(vs.len() / 3, ns.len() / 3, "positions and normals length not same");
+            assert!(!needs_tcoords || (vs.len() / 3 == ts.len() / 2), "not enough texture coords!");
          
             let mut vertices = vec![];
             
-            if vs.len() / 3 == ts.len() / 2 {
+            if needs_tcoords {
                 vs.chunks(3).zip(ts.chunks(2)).zip(ns.chunks(3)).for_each(|((vs, ts), ns)| {
                     vertices.extend(vs);
                     vertices.extend(ts);
                     vertices.extend(ns);
                 });
             } else {
-                vs.chunks(3).zip(ns.chunks(2)).for_each(|(vs, ns)| {
+                vs.chunks(3).zip(ns.chunks(3)).for_each(|(vs, ns)| {
                     vertices.extend(vs);
                     vertices.extend(ns);
                 });
@@ -72,13 +78,12 @@ impl Scene {
             let indices_buffer = ManagedBuffer::from_u32_data(device, wgpu::BufferUsage::INDEX, &m.mesh.indices);
             let vertex_buffer = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::VERTEX, &vertices);
 
-            let mat_idx = m.mesh.material_id.expect("no material associated");
             let indices_count = m.mesh.indices.len() as u32;
             meshes.push(Mesh {
                 indices_buffer,
                 vertex_buffer,
                 indices_count,
-                mat_name: mats[mat_idx].name.clone(),
+                mat_name,
             });
         }
         

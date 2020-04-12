@@ -66,7 +66,7 @@ impl Engine {
         );
         
         let mut scene = Scene::default();
-        scene.load_from_obj(&device, &mut encoder, "sponza", &mut mat_man, &mut renderer);
+        scene.load_from_obj(&device, &mut encoder, "Transport Shuttle_obj", &mut mat_man, &mut renderer);
 
         queue.submit(&[encoder.finish()]);
         

@@ -39,6 +39,7 @@ fn handle_device_event(ngn: &mut Engine, event: DeviceEvent) {
 }
 
 fn main() {
+    env_logger::init();
     
     const WIDTH: u16 = 800;
     const HEIGHT: u16 = 600;
