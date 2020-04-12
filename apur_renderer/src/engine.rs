@@ -54,9 +54,20 @@ impl Engine {
             present_mode: wgpu::PresentMode::Mailbox,
         });
 
-        let renderer = Renderer::new(&device, window_width, window_height);
-        let mat_man = MaterialManager::new(&device);
-        let scene = Scene::default();
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("engine start") });
+        
+        let mut renderer = Renderer::new(
+            &device,
+            window_width,
+            window_height,
+        );
+        
+        let mut mat_man = MaterialManager::new(&device);
+        let mut scene = Scene::default();
+        scene.load_from_obj(&device, &mut encoder, "plane", &mut mat_man, &mut renderer);
+
+        queue.submit(&[encoder.finish()]);
         
         Self {
             device,
@@ -69,7 +80,7 @@ impl Engine {
     }
 
     pub fn render(&mut self) {
-        let frame = self.swapchain.get_next_texture();
+        let frame = self.swapchain.get_next_texture().unwrap();
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render") });
         
         // TODO: maybe get RenderData::update_view working...
@@ -101,8 +112,8 @@ impl Engine {
         //     encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_light_ubo(), 0, 16);
         // }
 
-        // self.renderer.render(&frame, &mut encoder, &self.depth_texture_view, &self.render_data);
-        // self.queue.submit(&[encoder.finish()]);
+        self.renderer.render(&frame, &mut encoder, &self.mat_man);
+        self.queue.submit(&[encoder.finish()]);
     }
 
     pub fn handle_mouse_move(&mut self, dx: f64, dy: f64) {

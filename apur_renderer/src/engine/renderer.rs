@@ -1,18 +1,29 @@
 pub mod camera;
 pub mod light;
+mod pipeline;
 
 use camera::{Camera, Frustum};
 use light::{Light};
+use pipeline::Pipeline;
 
-use super::model::Scene;
-use super::material::MaterialManager;
+use super::buffer::ManagedBuffer;
+use super::model::{Mesh};
+use super::material::{MaterialManager, Material, FAMaterial, SPMaterial, DFMaterial, CombinedMaterial};
 
 pub struct Renderer {
     ds_texture: wgpu::TextureView,
+    transforms: ManagedBuffer,
+    lights_buf: ManagedBuffer,
+    sampler: wgpu::Sampler,
     camera: Camera,
     frustum: Frustum,
-    lights: Vec<Light>,
+    light: Light,
     // environment: Environment,
+
+    fa_pipe: Pipeline,
+    sp_pipe: Pipeline,
+    df_pipe: Pipeline,
+    comb_pipe: Pipeline,
 }
 
 impl Renderer {
@@ -32,25 +43,160 @@ impl Renderer {
             label: Some("Depth-Stencil texture"),
         });
         
+        let camera = Camera::default();
+        let frustum = Frustum::new(width, height);
+        let mut transforms_data = vec![];
+        transforms_data.extend(camera.view().as_ref());
+        transforms_data.extend(frustum.projection().as_ref());
+
+        let transforms = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &transforms_data);
+        let lights_buf = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &[0f32, 0f32, 0f32]);
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            lod_min_clamp: -100.0,
+            lod_max_clamp: 100.0,
+            compare: wgpu::CompareFunction::Always,
+        });
+
+        let gb1 = &[
+            wgpu::Binding {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: transforms.get_buffer(),
+                    range: 0 .. 2 * 64,
+                },
+            },
+            wgpu::Binding {
+                binding: 1,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: lights_buf.get_buffer(),
+                    range: 0 .. 12,
+                },
+            },
+        ];
+
+        let gb2 = &[
+            wgpu::Binding {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: transforms.get_buffer(),
+                    range: 0 .. 2 * 64,
+                },
+            },
+            wgpu::Binding {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+            wgpu::Binding {
+                binding: 2,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: lights_buf.get_buffer(),
+                    range: 0 .. 12,
+                },
+            },
+        ];
+        
         Self {
+            camera,
+            frustum,
             ds_texture: depth_texture.create_default_view(),
-            camera: Camera::default(),
-            frustum: Frustum::new(width, height),
-            lights: vec![],
+            light: Light::Directional(Default::default()),
+
+            fa_pipe: Pipeline::new(
+                device,
+                FAMaterial::SHADERS_SOURCE,
+                &FAMaterial::GLOBAL_BG_LAYOUT,
+                gb1,
+                &FAMaterial::MATERIAL_BG_LAYOUT,
+                &FAMaterial::VERTEX_STATE,
+            ),
+            sp_pipe: Pipeline::new(
+                device,
+                SPMaterial::SHADERS_SOURCE,
+                &SPMaterial::GLOBAL_BG_LAYOUT,
+                gb2,
+                &SPMaterial::MATERIAL_BG_LAYOUT,
+                &SPMaterial::VERTEX_STATE,
+            ),
+            df_pipe: Pipeline::new(
+                device,
+                DFMaterial::SHADERS_SOURCE,
+                &DFMaterial::GLOBAL_BG_LAYOUT,
+                gb2,
+                &DFMaterial::MATERIAL_BG_LAYOUT,
+                &DFMaterial::VERTEX_STATE,
+            ),
+            comb_pipe: Pipeline::new(
+                device,
+                CombinedMaterial::SHADERS_SOURCE,
+                &CombinedMaterial::GLOBAL_BG_LAYOUT,
+                gb2,
+                &CombinedMaterial::MATERIAL_BG_LAYOUT,
+                &CombinedMaterial::VERTEX_STATE,
+            ),
+
+            transforms,
+            lights_buf,
+            sampler,
+        }
+    }
+
+    pub fn add_meshes(&mut self, meshes: Vec<Mesh>, mat_manager: &MaterialManager,) {
+        for m in meshes {
+            let mat = mat_manager.get_material(m.get_mat_name()).unwrap();
+            match mat {
+                Material::FA(_) => {
+                    self.fa_pipe.add_mesh(m);
+                },
+                Material::SP(_) => {
+                    self.sp_pipe.add_mesh(m);
+                },
+                Material::DF(_) => {
+                    self.df_pipe.add_mesh(m);
+                },
+                Material::COMB(_) => {
+                    self.comb_pipe.add_mesh(m);
+                },
+            }
         }
     }
 
     pub fn render(
         &self,
         frame: &wgpu::SwapChainOutput,
-        device: &wgpu::Device,
         cmd_encoder: &mut wgpu::CommandEncoder,
-        scene: &Scene,
         mat_man: &MaterialManager,
     ) {
-        // material can be an enum
-        // foreach material in material manager:
-        //   material.activate_pipeline()
-        //   scene.draw_objects(material)
+        const CLEAR_COLOR: wgpu::Color = wgpu::Color { r: 0.2, g: 0.5, b: 0.7, a: 1.0 };
+        
+        let mut rpass = cmd_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                attachment: &frame.view,
+                resolve_target: None,
+                load_op: wgpu::LoadOp::Clear,
+                store_op: wgpu::StoreOp::Store,
+                clear_color: CLEAR_COLOR,
+            }],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                attachment: &self.ds_texture,
+                depth_load_op: wgpu::LoadOp::Clear,
+                depth_store_op: wgpu::StoreOp::Store,
+                clear_depth: 1.0,
+                stencil_load_op: wgpu::LoadOp::Load,
+                stencil_store_op: wgpu::StoreOp::Store,
+                clear_stencil: 0,
+            }),
+        });
+
+        self.fa_pipe.draw_meshes(&mut rpass, &mat_man);
+        self.sp_pipe.draw_meshes(&mut rpass, &mat_man);
+        self.df_pipe.draw_meshes(&mut rpass, &mat_man);
+        self.comb_pipe.draw_meshes(&mut rpass, &mat_man);
     }
 }
