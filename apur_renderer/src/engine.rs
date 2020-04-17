@@ -26,7 +26,7 @@ pub struct Engine {
 
 impl Engine {
 
-    const CAMERA_SPEED: f32 = 0.5;
+    const CAMERA_SPEED: f32 = 5.0;
     
     pub fn new(window: &Window) -> Self {
         let window_width = window.inner_size().width;
@@ -40,7 +40,7 @@ impl Engine {
             },
             wgpu::BackendBit::PRIMARY,
         )).expect("Couldn't get hardware adapter");
-        let (device, mut queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             extensions: wgpu::Extensions::default(),
             limits: wgpu::Limits::default(),
         }));
@@ -66,7 +66,7 @@ impl Engine {
         );
         
         let mut scene = Scene::default();
-        scene.load_from_obj(&device, &mut encoder, "Transport Shuttle_obj", &mut mat_man, &mut renderer);
+        scene.load_from_obj(&device, &mut encoder, "Pony_cartoon", &mut mat_man, &mut renderer);
 
         queue.submit(&[encoder.finish()]);
         
@@ -83,56 +83,16 @@ impl Engine {
     pub fn render(&mut self) {
         let frame = self.swapchain.get_next_texture().unwrap();
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render") });
-        
-        // TODO: maybe get RenderData::update_view working...
-        // ... ok so after a little backtracking and talking, update_view sets a write pending,
-        // queue.submit fails because there is a write pending, and currently wgpu doesn't
-        // have auto flushing or sync with write and queue submission, so we would have to manually
-        // wait till the write callback in RenderData::update_view is called
-        // the devs said the api isn't finalized yet and there are some other proposed changes
-        // that may land soon, keep following them.
-        // the devs also said APIs *could* store buffer pools internally so allocating temp buffers
-        // for copying may not even be expensive
-        // ...but these pools are not guarenteed tho so idk man
-        // https://github.com/gfx-rs/wgpu-rs/issues/9#issuecomment-494022784
-        // https://github.com/gpuweb/gpuweb/pull/509
-        // self.render_data.update_view(self.camera.view());
-        // if self.update_mats {
-        //     self.update_mats = false;
-        //     let temp_buffer = self.device
-        //         .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
-        //         .fill_from_slice(&[self.camera.view()]);
-        //     encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_uniforms_buffer(), 0, 64);
-        // }
 
-        // if self.update_light {
-        //     self.update_light = false;
-        //     let temp_buffer = self.device
-        //         .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
-        //         .fill_from_slice(&[angle_to_vec(self.light_dir_angle)]);
-        //     encoder.copy_buffer_to_buffer(&temp_buffer, 0, self.render_data.get_light_ubo(), 0, 16);
-        // }
-
-        self.renderer.render(&frame, &mut encoder, &self.mat_man);
+        self.renderer.render(&self.device, &frame, &mut encoder, &self.mat_man);
         self.queue.submit(&[encoder.finish()]);
     }
 
     pub fn handle_mouse_move(&mut self, dx: f64, dy: f64) {
-        // self.camera.change_angle(dx as f32, dy as f32);
-        // self.update_mats = true;
+        self.renderer.rotate_camera(dx as f32, dy as f32);
     }
 
     pub fn move_camera(&mut self, forward: bool) {
-        // self.camera.move_pos(if forward { 1.0 } else { -1.0 } * Self::CAMERA_SPEED);
-        // self.update_mats = true;
-    }
-
-    pub fn rotate_light(&mut self, right: bool) {
-        // if right {
-        //     self.light_dir_angle += f32::to_radians(1.0);
-        // } else {
-        //     self.light_dir_angle -= f32::to_radians(1.0);
-        // }
-        // self.update_light = true;
+        self.renderer.move_camera(if forward { 1.0 } else { -1.0 } * Self::CAMERA_SPEED);
     }
 }

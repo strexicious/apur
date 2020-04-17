@@ -16,6 +16,7 @@ void main() {
     f_tex_coords = tex_coords;
     f_tex_coords.y = 1.0 - f_tex_coords.y;
     f_normal = normal;
+    f_normal.y *= -1.0;
     
     gl_Position = proj * view * vec4(position, 1.0);
 }

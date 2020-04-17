@@ -12,6 +12,7 @@ use super::material::{MaterialManager, Material, FAMaterial, SPMaterial, DFMater
 
 pub struct Renderer {
     ds_texture: wgpu::TextureView,
+    update_transforms: bool,
     transforms: ManagedBuffer,
     lights_buf: ManagedBuffer,
     sampler: wgpu::Sampler,
@@ -50,8 +51,8 @@ impl Renderer {
         transforms_data.extend(camera.view().as_ref());
         transforms_data.extend(frustum.projection().as_ref());
 
-        let transforms = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &transforms_data);
-        let lights_buf = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM, &[0f32, -1f32, 0f32]);
+        let transforms = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::MAP_WRITE | wgpu::BufferUsage::COPY_DST, &transforms_data);
+        let lights_buf = ManagedBuffer::from_f32_data(device, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::MAP_WRITE | wgpu::BufferUsage::COPY_DST, &[0f32, -1f32, 0f32]);
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
@@ -106,6 +107,7 @@ impl Renderer {
         Self {
             camera,
             frustum,
+            update_transforms: false,
             ds_texture: depth_texture.create_default_view(),
             light: Light::Directional(Default::default()),
 
@@ -169,12 +171,18 @@ impl Renderer {
     }
 
     pub fn render(
-        &self,
+        &mut self,
+        device: &wgpu::Device,
         frame: &wgpu::SwapChainOutput,
         cmd_encoder: &mut wgpu::CommandEncoder,
         mat_man: &MaterialManager,
     ) {
         const CLEAR_COLOR: wgpu::Color = wgpu::Color { r: 0.2, g: 0.5, b: 0.7, a: 1.0 };
+
+        if self.update_transforms {
+            self.update_transforms = false;
+            self.transforms.update_f32_data(device, cmd_encoder, 0, self.camera.view().as_ref());
+        }
         
         let mut rpass = cmd_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -199,5 +207,15 @@ impl Renderer {
         self.sp_pipe.draw_meshes(&mut rpass, &mat_man);
         self.df_pipe.draw_meshes(&mut rpass, &mat_man);
         self.comb_pipe.draw_meshes(&mut rpass, &mat_man);
+    }
+
+    pub fn rotate_camera(&mut self, dx: f32, dy: f32) {
+        self.camera.change_angle(dx, dy);
+        self.update_transforms = true;
+    }
+
+    pub fn move_camera(&mut self, factor: f32) {
+        self.camera.move_pos(factor);
+        self.update_transforms = true;
     }
 }

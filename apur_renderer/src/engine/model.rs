@@ -1,3 +1,4 @@
+use std::time::{Instant, Duration};
 use zerocopy::{AsBytes};
 use super::material::{MaterialManager, Material};
 use super::renderer::Renderer;
@@ -41,10 +42,11 @@ impl Scene {
         renderer: &mut Renderer,
     ) {
         let (models, mats) = tobj::load_obj(format!("res/models/{}.obj", obj_filename).as_ref()).expect("Failed to load the model");
+
         for mat in mats.iter() {
             mat_manager.add_material(device, cmd_encoder, mat);
         }
-        
+
         let mut meshes = vec![];
         
         for m in models.into_iter() {
@@ -52,7 +54,15 @@ impl Scene {
             let ts = m.mesh.texcoords;
             let ns = m.mesh.normals;
 
-            let mat_idx = m.mesh.material_id.expect("no material associated");
+            let mat_idx = {
+                let mat_idx = m.mesh.material_id;
+                if mat_idx.is_none() {
+                    println!("no material associated, skipping model");
+                    continue;
+                }
+
+                mat_idx.unwrap()
+            };
             let mat_name = mats[mat_idx].name.clone();
 
             let needs_tcoords = if let Material::FA(_) = mat_manager.get_material(&mat_name).unwrap() { false } else { true };
@@ -60,7 +70,7 @@ impl Scene {
             assert_eq!(vs.len() / 3, ns.len() / 3, "positions and normals length not same");
             assert!(!needs_tcoords || (vs.len() / 3 == ts.len() / 2), "not enough texture coords!");
          
-            let mut vertices = vec![];
+            let mut vertices = Vec::with_capacity(vs.len() + ns.len() + ts.len());
             
             if needs_tcoords {
                 vs.chunks(3).zip(ts.chunks(2)).zip(ns.chunks(3)).for_each(|((vs, ts), ns)| {
@@ -86,7 +96,7 @@ impl Scene {
                 mat_name,
             });
         }
-        
+
         renderer.add_meshes(meshes, mat_manager);
     }
 }

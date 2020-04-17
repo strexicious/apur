@@ -20,7 +20,7 @@ fn handle_window_event(ngn: &mut Engine, event: WindowEvent, close_request: &mut
                 0x01 => *close_request = true,
                 0x11 | 0x1F => ngn.move_camera(input.scancode == 0x11),
                 0x21 => println!("FPS: {}", 1.0 / spf.as_secs_f32()),
-                0x1E | 0x20 => ngn.rotate_light(input.scancode == 0x20),
+                // 0x1E | 0x20 => ngn.rotate_light(input.scancode == 0x20),
                 _ => { },
             }
         },

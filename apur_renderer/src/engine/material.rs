@@ -587,20 +587,17 @@ impl MaterialManager {
 
 fn load_texture(device: &wgpu::Device, cmd_encoder: &mut wgpu::CommandEncoder, texture_name: &str) -> Rc<wgpu::TextureView> {
     println!("[Info] Loading texture: {}", texture_name);
+    
     let texture_image = {
         let mut image_file = File::open(format!("res/models/{}", texture_name)).expect("Failed to open texture image");
         let mut image_contents = vec![];
         let _ = image_file.read_to_end(&mut image_contents);
         
-        let texture_image = image::load_from_memory(&image_contents)
-            .or_else(|err| {
-                if texture_name.ends_with(".tga") {
-                    image::load_from_memory_with_format(&image_contents, image::ImageFormat::TGA)
-                } else {
-                    Err(err)
-                }
-            })
-            .expect(&format!("failed to load a texture image: {}", texture_name));
+        let texture_image = if texture_name.ends_with(".tga") {
+            image::load_from_memory_with_format(&image_contents, image::ImageFormat::TGA)
+        } else {
+            image::load_from_memory(&image_contents)
+        }.expect(&format!("failed to load a texture image: {}", texture_name));
         texture_image.into_rgba()
     };
     
