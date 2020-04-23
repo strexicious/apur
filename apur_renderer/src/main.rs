@@ -34,9 +34,29 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
         let cur_tick = Instant::now();
+        let spf = (cur_tick - last_tick).as_secs_f32();
 
         match event {
-            // Event::WindowEvent { event, ..} => handle_window_event(&mut ngn, event, &mut close_request, cur_tick - last_tick),
+            Event::WindowEvent {event, ..} => {
+                match event {
+                    WindowEvent::CloseRequested => close_request = true,
+                    WindowEvent::KeyboardInput { input, .. } => {
+                        match input.scancode {
+                            // escape key
+                            0x01 => close_request = true,
+                            0x21 => println!("FPS: {}", 1.0 / spf),
+                            _ => {},
+                        }
+                        ngn.handle_key_input(input);
+                    },
+                    _ => {}
+                }
+            },
+            Event::DeviceEvent { event, .. } => {
+                if let DeviceEvent::MouseMotion{ delta: (dx, dy) } = event {
+                    ngn.handle_mouse_move(dx, dy);
+                }
+            },
             Event::MainEventsCleared => {
                 if close_request {
                     println!("Shutting down...");
@@ -46,7 +66,6 @@ fn main() {
                 }
             },
             Event::RedrawRequested(_) => { ngn.render() },
-            // Event::DeviceEvent { event, .. } => handle_device_event(&mut ngn, event),
             _ => { }
         }
         last_tick = cur_tick;

@@ -1,4 +1,5 @@
 use winit::window::Window;
+use winit::event::KeyboardInput;
 
 use super::renderer::SolidRenderer;
 use super::world::World;
@@ -65,7 +66,7 @@ impl Engine {
         // self.renderer.rotate_camera(dx as f32, dy as f32);
     }
 
-    pub fn move_camera(&mut self, forward: bool) {
+    pub fn handle_key_input(&mut self, input: KeyboardInput) {
         // self.renderer.move_camera(if forward { 1.0 } else { -1.0 } * Self::CAMERA_SPEED);
     }
 }
