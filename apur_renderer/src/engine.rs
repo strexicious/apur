@@ -1,34 +1,20 @@
 use winit::window::Window;
-use glam::{Vec3};
 
-mod model;
-mod renderer;
-mod material;
-mod buffer;
-
-use model::{Scene};
-use renderer::{Renderer, camera::{Camera, Frustum}};
-use material::MaterialManager;
-
-#[inline]
-fn angle_to_vec(angle: f32) -> Vec3 {
-    Vec3::new(f32::cos(angle), f32::sin(angle), 0.0)
-}
+use super::renderer::SolidRenderer;
+use super::world::World;
+use super::material_manager::MaterialManager;
 
 pub struct Engine {
     device: wgpu::Device,
     queue: wgpu::Queue,
     swapchain: wgpu::SwapChain,
-    renderer: Renderer,
-    scene: Scene,
+    world: World,
+    solid_rdr: SolidRenderer,
     mat_man: MaterialManager,
 }
 
 impl Engine {
-
-    const CAMERA_SPEED: f32 = 5.0;
-    
-    pub fn new(window: &Window) -> Self {
+    pub fn new(window: &Window, world: World) -> Self {
         let window_width = window.inner_size().width;
         let window_height = window.inner_size().height;
         
@@ -40,12 +26,12 @@ impl Engine {
             },
             wgpu::BackendBit::PRIMARY,
         )).expect("Couldn't get hardware adapter");
+        
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             extensions: wgpu::Extensions::default(),
             limits: wgpu::Limits::default(),
         }));
         
-        let surface = wgpu::Surface::create(window);
         let swapchain = device.create_swap_chain(&surface, &wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
             format: wgpu::TextureFormat::Bgra8UnormSrgb,
@@ -54,29 +40,16 @@ impl Engine {
             present_mode: wgpu::PresentMode::Mailbox,
         });
 
+        let solid_rdr = SolidRenderer::new(&device);
+        let mat_man = MaterialManager::default();
 
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("engine start") });
-        
-        let mut mat_man = MaterialManager::new(&device);
-        let mut renderer = Renderer::new(
-            &device,
-            window_width,
-            window_height,
-            &mat_man,
-        );
-        
-        let mut scene = Scene::default();
-        scene.load_from_obj(&device, &mut encoder, "Pony_cartoon", &mut mat_man, &mut renderer);
-
-        queue.submit(&[encoder.finish()]);
-        
         Self {
             device,
             queue,
             swapchain,
-            renderer,
+            solid_rdr,
+            world,
             mat_man,
-            scene,
         }
     }
 
@@ -84,15 +57,34 @@ impl Engine {
         let frame = self.swapchain.get_next_texture().unwrap();
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render") });
 
-        self.renderer.render(&self.device, &frame, &mut encoder, &self.mat_man);
+        // self.solid_rdr.render(self.world.get_solid_objects());
         self.queue.submit(&[encoder.finish()]);
     }
 
     pub fn handle_mouse_move(&mut self, dx: f64, dy: f64) {
-        self.renderer.rotate_camera(dx as f32, dy as f32);
+        // self.renderer.rotate_camera(dx as f32, dy as f32);
     }
 
     pub fn move_camera(&mut self, forward: bool) {
-        self.renderer.move_camera(if forward { 1.0 } else { -1.0 } * Self::CAMERA_SPEED);
+        // self.renderer.move_camera(if forward { 1.0 } else { -1.0 } * Self::CAMERA_SPEED);
     }
 }
+
+/*
+
+    ds_texture: wgpu::TextureView,
+    transforms: ManagedBuffer,
+    lights_buf: ManagedBuffer,
+
+    let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+        size: wgpu::Extent3d { width, height, depth: 1, },
+        array_layer_count: 1,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Depth32Float,
+        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        label: Some("Depth-Stencil texture"),
+    });
+
+    */
