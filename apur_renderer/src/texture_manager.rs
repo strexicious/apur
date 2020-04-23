@@ -1,16 +1,33 @@
 use std::io::Read;
 use std::fs::File;
 use std::collections::HashMap;
+use std::rc::Rc;
 
-use super::buffer::ManagedBuffer;
-
-#[derive(Default)]
-pub struct MaterialManager {
-    textures: HashMap<String, wgpu::TextureView>,
-    buffers: HashMap<String, ManagedBuffer>,
+pub struct TextureManager {
+    sampler: wgpu::Sampler, 
+    textures: HashMap<String, Rc<wgpu::TextureView>>,
 }
 
-impl MaterialManager {
+impl TextureManager {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            lod_min_clamp: -100.0,
+            lod_max_clamp: 100.0,
+            compare: wgpu::CompareFunction::Always,
+        });
+
+        Self {
+            sampler,
+            textures: HashMap::new(),
+        }
+    }
+    
     pub fn load_texture(&mut self, device: &wgpu::Device, cmd_encoder: &mut wgpu::CommandEncoder, texture_name: String) {
         println!("[Info] Loading texture: {}", texture_name);
         
@@ -65,18 +82,14 @@ impl MaterialManager {
             texture_extent
         );
 
-        self.textures.insert(texture_name, texture.create_default_view());
-    }
-    
-    pub fn add_buffer(&mut self, mat_name: String, buffer: ManagedBuffer) {
-        self.buffers.insert(mat_name, buffer);
+        self.textures.insert(texture_name, Rc::new(texture.create_default_view()));
     }
 
-    pub fn get_texture(&self, texture_name: &str) -> &wgpu::TextureView {
-        self.textures.get(texture_name).unwrap()
+    pub fn get_sampler(&self) -> &wgpu::Sampler {
+        &self.sampler
     }
 
-    pub fn get_buffer(&self, mat_name: &str) -> &ManagedBuffer {
-        self.buffers.get(mat_name).unwrap()
+    pub fn get_texture(&self, texture_name: &str) -> Rc<wgpu::TextureView> {
+        self.textures.get(texture_name).unwrap().clone()
     }
 }

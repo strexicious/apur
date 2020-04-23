@@ -26,8 +26,7 @@ fn main() {
     window.set_cursor_visible(false);
     // window.set_cursor_grab(true).expect("Couldn't lock the cursor...");
     
-    let world = World::new(WIDTH as u32, HEIGHT as u32);
-    let mut ngn = Engine::new(&window, world);
+    let mut ngn = Engine::new(&window);
     let mut close_request = false;
     let mut last_tick = Instant::now();
 
