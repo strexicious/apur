@@ -22,12 +22,16 @@ impl World {
             solid_objects: vec![],
             lights: vec![
                 Light::Directional {
-                    direction: Vec3::new(0.0, -1.0, 0.0),
+                    direction: Vec3::new(0.0, 0.0, 1.0),
                     color: Vec3::one(),
                 }
             ],
             camera: Camera::new(width, height),
         }
+    }
+
+    pub fn add_solid_object(&mut self, object: Object<SolidMaterial>) {
+        self.solid_objects.push(object);
     }
 
     pub fn get_solid_objects(&self) -> &[Object<SolidMaterial>] {

@@ -39,6 +39,10 @@ impl SolidRenderer {
         }
     }
 
+    pub fn generate_material(&self, device: &wgpu::Device, color: [f32; 3]) -> SolidMaterial {
+        SolidMaterial::new(device, self.pipeline.get_element_layout(), color)
+    }
+
     pub fn render<'a>(&'a mut self, rpass: &mut wgpu::RenderPass<'a>, objects: &'a [Object<SolidMaterial>]) {
         rpass.set_pipeline(self.pipeline.get_pipeline());
         rpass.set_bind_group(0, &self.bind_group, &[]);

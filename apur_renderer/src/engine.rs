@@ -1,10 +1,17 @@
 use winit::window::Window;
 use winit::event::KeyboardInput;
 
+use super::mesh::Mesh;
 use super::renderer::SolidRenderer;
-use super::world::World;
+use super::world::{World, object::Object};
 use super::texture_manager::TextureManager;
 use super::buffer::ManagedBuffer;
+
+#[derive(Default)]
+struct Updates {
+    camera: bool,
+    light: bool,
+}
 
 pub struct Engine {
     device: wgpu::Device,
@@ -13,6 +20,7 @@ pub struct Engine {
     ds_texture: wgpu::TextureView,
     transforms_buffer: ManagedBuffer,
     lights_buffer: ManagedBuffer,
+    updates: Updates,
     world: World,
     solid_rdr: SolidRenderer,
     tex_man: TextureManager,
@@ -67,6 +75,22 @@ impl Engine {
             label: Some("Depth-Stencil texture"),
         }).create_default_view();
 
+        let updates = Updates::default();
+
+        let test_material = solid_rdr.generate_material(&device, [1.0, 0.0, 0.0]);
+        let test_mesh = Mesh::new(
+            &device,
+            &[
+                -1.0, -1.0, -1.0,  0.0,  0.0,  1.0,
+                 1.0, -0.5, -1.0,  0.0,  0.0,  1.0,
+                 0.0,  1.0, -1.0,  0.0,  0.0,  1.0,
+            ],
+            &[0, 1, 2]
+        );
+        let test_object = Object::new(test_mesh, test_material);
+        world.add_solid_object(test_object);
+
+
         Self {
             device,
             queue,
@@ -74,15 +98,27 @@ impl Engine {
             ds_texture,
             transforms_buffer,
             lights_buffer,
+            updates,
             solid_rdr,
             world,
             tex_man,
         }
     }
 
+    fn update(&mut self, encoder: &mut wgpu::CommandEncoder) {
+        if self.updates.camera {
+            self.updates.camera = false;
+
+            let cam = self.world.get_camera();
+            self.transforms_buffer.update_data(&self.device, encoder, 0, &cam.view().to_cols_array());
+        }
+    }
+
     pub fn render(&mut self) {
         let frame = self.swapchain.get_next_texture().unwrap();
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render") });
+
+        self.update(&mut encoder);
 
         const CLEAR_COLOR: wgpu::Color = wgpu::Color { r: 0.2, g: 0.5, b: 0.7, a: 1.0 };
         
@@ -113,10 +149,18 @@ impl Engine {
     }
 
     pub fn handle_mouse_move(&mut self, dx: f64, dy: f64) {
-        // self.renderer.rotate_camera(dx as f32, dy as f32);
+        let cam = self.world.get_camera();
+        cam.change_angle(dx as f32, dy as f32);
+        self.updates.camera = true;
     }
 
     pub fn handle_key_input(&mut self, input: KeyboardInput) {
-        // self.renderer.move_camera(if forward { 1.0 } else { -1.0 } * Self::CAMERA_SPEED);
+        let cam = self.world.get_camera();
+        match input.scancode {
+            0x11 => cam.move_pos( 1.0),
+            0x1F => cam.move_pos(-1.0),
+            _ => {}
+        }
+        self.updates.camera = true;
     }
 }

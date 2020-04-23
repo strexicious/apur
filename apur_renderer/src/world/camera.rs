@@ -36,17 +36,17 @@ impl Camera {
     }
 
     pub fn projection(&self) -> Mat4 {
-        // this implementation is meant for Vulkan NDC
-        let proj = Mat4::perspective_rh_gl(self.frustum.fov_y, self.frustum.aspect_ratio, self.frustum.znear, self.frustum.zfar);
+        let f = 1.0 / (self.frustum.fov_y.to_radians() * 0.5).tan();
+        let a = f / self.frustum.aspect_ratio;
+        let b = self.frustum.zfar / (self.frustum.znear - self.frustum.zfar);
+        let c = self.frustum.znear * b;
         
-        let gl2vul_mat = Mat4::from_cols_array(&[
-            1.0,  0.0, 0.0, 0.0,
-            0.0,  1.0, 0.0, 0.0,
-            0.0,  0.0, 0.5, 0.5,
-            0.0,  0.0, 0.0, 1.0,
-        ]);
-        
-        gl2vul_mat * proj
+        Mat4::from_cols(
+            glam::vec4(  a, 0.0, 0.0,  0.0),
+            glam::vec4(0.0,   f, 0.0,  0.0),
+            glam::vec4(0.0, 0.0,   b, -1.0),
+            glam::vec4(0.0, 0.0,   c,  0.0),
+        )
     }
 
     pub fn change_angle(&mut self, dx: f32, dy: f32) {

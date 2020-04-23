@@ -12,7 +12,6 @@ layout(set = 0, binding = 0) uniform Transforms {
 
 void main() {
     f_normal = normal;
-    f_normal.y *= -1.0;
     
     gl_Position = proj * view * vec4(position, 1.0);
 }

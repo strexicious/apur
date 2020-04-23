@@ -7,6 +7,10 @@ pub struct Object<M: Material> {
 }
 
 impl<M: Material> Object<M> {
+    pub fn new(mesh: Mesh, material: M) -> Self {
+        Self { mesh, material }
+    }
+    
     pub fn get_mesh(&self) -> &Mesh {
         &self.mesh
     }

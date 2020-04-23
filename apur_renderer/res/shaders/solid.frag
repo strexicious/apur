@@ -6,6 +6,7 @@ layout(location = 0) out vec4 out_color;
 
 layout(set = 0, binding = 1) uniform Light {
     vec3 direction;
+    vec3 color;
 } light;
 layout(set = 1, binding = 0) uniform Color {
     vec3 albedo;
