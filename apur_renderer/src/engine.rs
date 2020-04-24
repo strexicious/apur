@@ -1,5 +1,6 @@
 use winit::window::Window;
 use winit::event::KeyboardInput;
+use glam::Vec4;
 
 use super::mesh::Mesh;
 use super::renderer::SolidRenderer;
@@ -55,7 +56,12 @@ impl Engine {
         });
 
         let cam = world.get_camera();
-        let transforms = [cam.view().to_cols_array(), cam.projection().to_cols_array()];
+        let mut transforms = Vec::<f32>::new();
+        
+        transforms.extend(cam.view().to_cols_array().iter());
+        transforms.extend((cam.view() * Vec4::zero()).as_ref());
+        transforms.extend(cam.projection().to_cols_array().iter());
+        
         let transforms_buffer = ManagedBuffer::from_data(&device, wgpu::BufferUsage::UNIFORM, &transforms);
         
         let lights = world.get_lights().iter().map(|l| l.to_shader_data()).flatten().collect::<Vec<f32>>();
@@ -77,7 +83,7 @@ impl Engine {
 
         let updates = Updates::default();
 
-        let test_material = solid_rdr.generate_material(&device, [1.0, 0.0, 0.0]);
+        let test_material = solid_rdr.generate_material(&device, [1.0, 0.0, 0.0], 100.0);
         let test_mesh = Mesh::new(
             &device,
             &[
@@ -110,7 +116,12 @@ impl Engine {
             self.updates.camera = false;
 
             let cam = self.world.get_camera();
-            self.transforms_buffer.update_data(&self.device, encoder, 0, &cam.view().to_cols_array());
+            let mut transforms = Vec::<f32>::new();
+            
+            transforms.extend(cam.view().to_cols_array().iter());
+            transforms.extend((cam.view() * Vec4::zero()).as_ref());
+            
+            self.transforms_buffer.update_data(&self.device, encoder, 0, &transforms);
         }
     }
 
@@ -157,8 +168,8 @@ impl Engine {
     pub fn handle_key_input(&mut self, input: KeyboardInput) {
         let cam = self.world.get_camera();
         match input.scancode {
-            0x11 => cam.move_pos( 1.0),
-            0x1F => cam.move_pos(-1.0),
+            0x11 => cam.move_pos( 0.1),
+            0x1F => cam.move_pos(-0.1),
             _ => {}
         }
         self.updates.camera = true;

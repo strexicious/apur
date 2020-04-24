@@ -29,7 +29,7 @@ impl Shader for SolidShader {
 
     const ELEMENT_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static> = wgpu::BindGroupLayoutDescriptor {
         bindings: &[
-            // albedo
+            // albedo, roughness
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStage::FRAGMENT,

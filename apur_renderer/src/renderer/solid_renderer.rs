@@ -39,8 +39,8 @@ impl SolidRenderer {
         }
     }
 
-    pub fn generate_material(&self, device: &wgpu::Device, color: [f32; 3]) -> SolidMaterial {
-        SolidMaterial::new(device, self.pipeline.get_element_layout(), color)
+    pub fn generate_material(&self, device: &wgpu::Device, color: [f32; 3], roughness: f32) -> SolidMaterial {
+        SolidMaterial::new(device, self.pipeline.get_element_layout(), color, roughness)
     }
 
     pub fn render<'a>(&'a mut self, rpass: &mut wgpu::RenderPass<'a>, objects: &'a [Object<SolidMaterial>]) {

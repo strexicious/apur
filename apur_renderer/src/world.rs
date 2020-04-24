@@ -22,7 +22,7 @@ impl World {
             solid_objects: vec![],
             lights: vec![
                 Light::Directional {
-                    direction: Vec3::new(0.0, 0.0, 1.0),
+                    direction: Vec3::new(0.0, 0.0, -1.0),
                     color: Vec3::one(),
                 }
             ],
