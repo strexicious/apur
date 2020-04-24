@@ -58,8 +58,7 @@ vec3 schilcksReflection(float cos_theta) {
 
 vec3 spcular_brdf(vec3 l, vec3 v) {
     vec3 h = normalize(l + v);
-    //  * beckndf(h)
-    return schilcksReflection(dot(h, l)) * shadowMask(l, v, h) / (4 * abs(dot(f_normal, l)) * abs(dot(f_normal, v)));
+    return schilcksReflection(dot(h, l)) * shadowMask(l, v, h) * beckndf(h) / (4 * abs(dot(f_normal, l)) * abs(dot(f_normal, v)));
 }
 
 void main() {

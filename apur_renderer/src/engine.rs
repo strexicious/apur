@@ -83,7 +83,7 @@ impl Engine {
 
         let updates = Updates::default();
 
-        let test_material = solid_rdr.generate_material(&device, [1.0, 0.0, 0.0], 100.0);
+        let test_material = solid_rdr.generate_material(&device, [1.0, 0.0, 0.0], 5.0);
         let test_mesh = Mesh::new(
             &device,
             &[
