@@ -1,11 +1,7 @@
 @echo off
 for %%s in (
-    fixed_albedo.vert
-    fixed_albedo.frag
-    specular.vert
-    specular.frag
-    diffuse.vert
-    diffuse.frag
+    solid.vert
+    solid.frag
     combined.vert
     combined.frag
 ) do (

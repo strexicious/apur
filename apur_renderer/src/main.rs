@@ -8,7 +8,6 @@ use winit::{
 };
 
 use apur_renderer::engine::Engine;
-use apur_renderer::world::World;
 
 fn main() {
     env_logger::init();

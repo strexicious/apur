@@ -14,7 +14,7 @@ impl Shader for SolidShader {
             // projection view matrix data
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStage::VERTEX,
+                visibility: wgpu::ShaderStage::all(),
                 ty: wgpu::BindingType::UniformBuffer { dynamic: false },
             },
             // light data

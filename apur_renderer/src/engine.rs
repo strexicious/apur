@@ -59,7 +59,7 @@ impl Engine {
         let mut transforms = Vec::<f32>::new();
         
         transforms.extend(cam.view().to_cols_array().iter());
-        transforms.extend((cam.view() * Vec4::zero()).as_ref());
+        transforms.extend(cam.get_position().extend(0.0).as_ref());
         transforms.extend(cam.projection().to_cols_array().iter());
         
         let transforms_buffer = ManagedBuffer::from_data(&device, wgpu::BufferUsage::UNIFORM, &transforms);
@@ -83,7 +83,7 @@ impl Engine {
 
         let updates = Updates::default();
 
-        let test_material = solid_rdr.generate_material(&device, [1.0, 0.0, 0.0], 5.0);
+        let test_material = solid_rdr.generate_material(&device, [1.0, 0.0, 0.0], 0.1);
         let test_mesh = Mesh::new(
             &device,
             &[
@@ -119,7 +119,7 @@ impl Engine {
             let mut transforms = Vec::<f32>::new();
             
             transforms.extend(cam.view().to_cols_array().iter());
-            transforms.extend((cam.view() * Vec4::zero()).as_ref());
+            transforms.extend(cam.get_position().extend(0.0).as_ref());
             
             self.transforms_buffer.update_data(&self.device, encoder, 0, &transforms);
         }
@@ -127,7 +127,7 @@ impl Engine {
 
     pub fn render(&mut self) {
         let frame = self.swapchain.get_next_texture().unwrap();
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render") });
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render encoder") });
 
         self.update(&mut encoder);
 

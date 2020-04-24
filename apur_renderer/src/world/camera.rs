@@ -31,6 +31,10 @@ impl Camera {
         }
     }
 
+    pub fn get_position(&self) -> Vec3 {
+        self.position
+    }
+
     pub fn view(&self) -> Mat4 {
         Mat4::look_at_rh(self.position, self.position + self.forward, glam::vec3(0.0, 1.0, 0.0))
     }

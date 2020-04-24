@@ -1,10 +1,15 @@
 #version 450
 
 layout(location = 0) in vec3 f_normal;
-layout(location = 1) in vec3 f_view_dir;
+layout(location = 1) in vec3 f_position;
 
 layout(location = 0) out vec4 out_color;
 
+layout(set = 0, binding = 0) uniform Transforms {
+    mat4 view;
+    vec3 cam_orig;
+    mat4 proj;
+};
 layout(set = 0, binding = 1) uniform Light {
     vec3 direction;
     vec3 color;
@@ -16,6 +21,7 @@ layout(set = 1, binding = 0) uniform Color {
 };
 
 const float PI = 3.141592;
+const float EPS = 0.00001;
 
 float beckndf(vec3 m) {
     float ndm = dot(f_normal, m);
@@ -58,9 +64,15 @@ vec3 schilcksReflection(float cos_theta) {
 
 vec3 spcular_brdf(vec3 l, vec3 v) {
     vec3 h = normalize(l + v);
-    return schilcksReflection(dot(h, l)) * shadowMask(l, v, h) * beckndf(h) / (4 * abs(dot(f_normal, l)) * abs(dot(f_normal, v)));
+    return schilcksReflection(dot(h, l)) * shadowMask(l, v, h) * beckndf(h) / (4 * max(EPS, dot(f_normal, l)) * max(EPS, dot(f_normal, v)));
 }
 
 void main() {
-    out_color = vec4(PI * spcular_brdf(-light.direction, f_view_dir) * light.color * max(0.0, dot(f_normal, -light.direction)), 1.0);
+    vec3 view_dir = normalize(cam_orig - f_position);
+    vec3 light_dir = normalize(-light.direction);
+    if (dot(f_normal, view_dir) > 0) {
+        out_color = vec4(PI * spcular_brdf(light_dir, view_dir) * light.color * max(0.0, dot(f_normal, light_dir)), 1.0);
+    } else {
+        out_color = vec4(0.0, 0.0, 0.0, 1.0);
+    }
 }

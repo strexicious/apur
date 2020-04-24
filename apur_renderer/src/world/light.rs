@@ -14,6 +14,7 @@ impl Light {
         match self {
             Light::Directional { direction, color } => {
                 res.extend(direction.as_ref());
+                res.push(0.0); // padding for how uniform alignment works :/
                 res.extend(color.as_ref());
             }
         }
