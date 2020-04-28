@@ -6,14 +6,13 @@ pub trait Material {
 
 pub struct SolidMaterial {
     color: [f32; 3],
-    roughness: f32,
     uniform_buffer: ManagedBuffer,
     bind_group: wgpu::BindGroup,
 }
 
 impl SolidMaterial {
-    pub fn new(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayout, color: [f32; 3], roughness: f32) -> Self {
-        let uniform_buffer = ManagedBuffer::from_data(device, wgpu::BufferUsage::UNIFORM, &[color[0], color[1], color[2], roughness]);
+    pub fn new(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayout, color: [f32; 3]) -> Self {
+        let uniform_buffer = ManagedBuffer::from_data(device, wgpu::BufferUsage::UNIFORM, &color);
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: bind_group_layout,
             bindings: &[
@@ -30,7 +29,6 @@ impl SolidMaterial {
 
         Self {
             color,
-            roughness,
             uniform_buffer,
             bind_group,
         }

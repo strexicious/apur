@@ -4,8 +4,9 @@ pub mod renderer;
 pub mod world;
 
 // middle layer
-pub mod buffer;
-pub mod texture_manager;
-pub mod mesh;
-pub mod pipeline;
-pub mod shader;
+mod buffer;
+mod texture_manager;
+mod mesh;
+mod pipeline;
+mod shader;
+mod model_importer;

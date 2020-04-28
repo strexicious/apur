@@ -1,12 +1,13 @@
+use std::rc::Rc;
+
 use winit::window::Window;
 use winit::event::KeyboardInput;
-use glam::Vec4;
 
-use super::mesh::Mesh;
 use super::renderer::SolidRenderer;
 use super::world::{World, object::Object};
 use super::texture_manager::TextureManager;
 use super::buffer::ManagedBuffer;
+use super::model_importer::ModelImporter;
 
 #[derive(Default)]
 struct Updates {
@@ -83,19 +84,11 @@ impl Engine {
 
         let updates = Updates::default();
 
-        let test_material = solid_rdr.generate_material(&device, [1.0, 0.0, 0.0], 0.1);
-        let test_mesh = Mesh::new(
-            &device,
-            &[
-                -1.0, -1.0, -1.0,  0.0,  0.0,  1.0,
-                 1.0, -0.5, -1.0,  0.0,  0.0,  1.0,
-                 0.0,  1.0, -1.0,  0.0,  0.0,  1.0,
-            ],
-            &[0, 1, 2]
-        );
-        let test_object = Object::new(test_mesh, test_material);
-        world.add_solid_object(test_object);
-
+        let test_material = Rc::new(solid_rdr.generate_material(&device, [0.7, 0.2, 0.3]));
+        for m in ModelImporter::load_meshes_obj(&device, "c_fear"){
+            let test_object = Object::new(m, test_material.clone());
+            world.add_solid_object(test_object);
+        }
 
         Self {
             device,

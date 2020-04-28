@@ -14,7 +14,7 @@ impl Shader for SolidShader {
             // projection view matrix data
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStage::all(),
+                visibility: wgpu::ShaderStage::VERTEX,
                 ty: wgpu::BindingType::UniformBuffer { dynamic: false },
             },
             // light data
@@ -29,7 +29,7 @@ impl Shader for SolidShader {
 
     const ELEMENT_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static> = wgpu::BindGroupLayoutDescriptor {
         bindings: &[
-            // albedo, roughness
+            // albedo
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStage::FRAGMENT,

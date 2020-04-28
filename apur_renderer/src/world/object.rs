@@ -1,13 +1,15 @@
+use std::rc::Rc;
+
 use crate::mesh::Mesh;
 use super::material::Material;
 
 pub struct Object<M: Material> {
-    material: M,
+    material: Rc<M>,
     mesh: Mesh,
 }
 
 impl<M: Material> Object<M> {
-    pub fn new(mesh: Mesh, material: M) -> Self {
+    pub fn new(mesh: Mesh, material: Rc<M>) -> Self {
         Self { mesh, material }
     }
     
