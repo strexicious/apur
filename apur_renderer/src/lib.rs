@@ -1,12 +1,6 @@
-// top layer
-pub mod engine;
-pub mod renderer;
-pub mod world;
-
-// middle layer
-mod buffer;
-mod texture_manager;
-mod mesh;
-mod pipeline;
-mod shader;
-mod model_importer;
+pub mod buffer;
+pub mod pipeline;
+pub mod renderable;
+pub mod rendering;
+pub mod shader;
+pub mod texture;

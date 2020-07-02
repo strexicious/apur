@@ -1,3 +1,7 @@
+// well we could make Shader a dynamic object,
+// but for now lets just say that shaders will
+// be created at compile time, and these constants
+// in the traits are like a "constant functions"
 pub trait Shader {
     const GLOBAL_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static>;
     const ELEMENT_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static>;
