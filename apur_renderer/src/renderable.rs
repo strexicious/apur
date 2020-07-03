@@ -1,4 +1,5 @@
 use super::buffer::ManagedBuffer;
+use super::texture::Texture2D;
 
 pub struct IndexedVertex {
     vertex_buffer: ManagedBuffer,
@@ -32,15 +33,20 @@ impl IndexedVertex {
 }
 
 pub enum Geometry {
-    // the vertex buffer can have any number of 
-    // tightly packed components, for example positions
-    // and texture coords together etc.
-    IndexedVertex(IndexedVertex),
+    Solid(IndexedVertex), // vertices only have positions
+    TexturedSolid(IndexedVertex), // vertices have positions and texture coords
+    // water
+    // cloth
+    // etc
 }
 
 pub enum Material {
     // just to have something, we put this here
-    SingleColor(f32, f32, f32, f32),
+    DiffuseColor(f32, f32, f32, f32),
+    SpecularColor(f32, f32, f32, f32),
+    DiffuseMapped(Texture2D),
+    SpecularMapped(Texture2D),
+    Mixed(Box<Material>, Box<Material>, f32),
 }
 
 pub struct Renderable {
