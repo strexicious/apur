@@ -1,4 +1,15 @@
-use super::shader::Shader;
+/// Well we could make Shader a dynamic object,
+/// but for now lets just say that shaders will
+/// be created at compile time, and these constants
+/// in the traits are like a "constant functions"
+/// See solid_shader example for usage.
+pub trait RenderShader {
+    const GLOBAL_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static>;
+    const ELEMENT_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static>;
+    const VERTEX_MODULE: &'static [u8];
+    const FRAGMENT_MODULE: &'static [u8];
+    const VERTEX_STATE_DESC: wgpu::VertexStateDescriptor<'static>;
+}
 
 pub struct RenderPipeline {
     pipeline: wgpu::RenderPipeline,
@@ -7,7 +18,7 @@ pub struct RenderPipeline {
 }
 
 impl RenderPipeline {
-    pub fn new<T: Shader>(device: &wgpu::Device) -> Self {
+    pub fn new<T: RenderShader>(device: &wgpu::Device) -> Self {
         let global_layout = device.create_bind_group_layout(&T::GLOBAL_LAYOUT_DESC);
         let element_layout = device.create_bind_group_layout(&T::ELEMENT_LAYOUT_DESC);
     
@@ -67,15 +78,17 @@ impl RenderPipeline {
         }
     }
 
-    pub fn get_pipeline(&self) -> &wgpu::RenderPipeline {
-        &self.pipeline
-    }
-
-    pub fn get_global_layout(&self) -> &wgpu::BindGroupLayout {
+    pub fn global_layout(&self) -> &wgpu::BindGroupLayout {
         &self.global_layout
     }
 
-    pub fn get_element_layout(&self) -> &wgpu::BindGroupLayout {
+    pub fn element_layout(&self) -> &wgpu::BindGroupLayout {
         &self.element_layout
+    }
+}
+
+impl AsRef<wgpu::RenderPipeline> for RenderPipeline {
+    fn as_ref(&self) -> &wgpu::RenderPipeline {
+        &self.pipeline
     }
 }

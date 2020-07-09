@@ -1,6 +1,24 @@
-[workspace]
+[package]
+name = "apur"
+version = "0.1.0"
+authors = ["Strexicious <strexicious@gmail.com>"]
+edition = "2018"
 
+[dependencies]
+apur_renderer = { path = "apur_renderer" }
+apur_model = { path = "apur_model" }
+wgpu = "0.5.0"
+futures = "0.3.5"
+log = "0.4"
+env_logger = "0.7.1"
+winit = "0.21.0"
+
+[workspace]
 members = [
     "apur_renderer",
-    "apur_physics"
+    "apur_model",
 ]
+
+[[example]]
+name = "solid_shader"
+path = "examples/solid_shader.rs"

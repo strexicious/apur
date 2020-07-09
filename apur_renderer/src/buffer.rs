@@ -1,5 +1,14 @@
+use log::trace;
 use zerocopy::AsBytes;
 
+use super::error as apur_error;
+
+/// A data buffer on the GPU. Provides easy to use API
+/// to create and manage the underlying buffer. There are
+/// no restrictions of what type of data needs to be passed
+/// in, as long as it implements [`AsBytes`].
+///
+/// [`AsBytes`]: https://docs.rs/zerocopy/0.3.0/zerocopy/trait.AsBytes.html
 pub struct ManagedBuffer {
     size_bytes: usize,
     buffer: wgpu::Buffer,
@@ -24,15 +33,16 @@ impl ManagedBuffer {
         }
     }
 
+    /// # Panics
+    /// If data is too big to fit in the buffer at the offset provided.
     pub async fn update_data<T: AsBytes>(
         &mut self,
         offset: usize,
         data: &[T],
-    ) -> Result<(), wgpu::BufferAsyncErr> {
-        assert!(
-            (data.len() * std::mem::size_of::<T>()) <= (self.size_bytes - offset),
-            "data does not fit into the buffer!"
-        );
+    ) -> apur_error::Result<()> {
+        if (data.len() * std::mem::size_of::<T>()) > (self.size_bytes - offset) {
+            return Err(apur_error::APURRendererError::BufferDataSizeMismatch);
+        }
 
         let byte_data = data
             .iter()
@@ -44,16 +54,22 @@ impl ManagedBuffer {
                 offset as wgpu::BufferAddress,
                 byte_data.len() as wgpu::BufferAddress,
             )
-            .await?;
+            .await
+            .expect("failed to map_write into the buffer");
         buf_map.as_slice().copy_from_slice(byte_data.as_slice());
+
+        trace!("Wrote to a mapped buffer {:?}", byte_data);
+        
         Ok(())
     }
 
-    pub fn get_buffer(&self) -> &wgpu::Buffer {
-        &self.buffer
-    }
-
-    pub fn get_size_bytes(&self) -> usize {
+    pub fn size_bytes(&self) -> usize {
         self.size_bytes
+    }
+}
+
+impl AsRef<wgpu::Buffer> for ManagedBuffer {
+    fn as_ref(&self) -> &wgpu::Buffer {
+        &self.buffer
     }
 }
