@@ -83,7 +83,6 @@ impl ApplicationDriver for GeneralDriver {
                 cpass.set_bind_group(0, &self.bind_group, &[]);
                 cpass.dispatch(4, 1, 1);
             }
-
             return vec![encoder];
         }
 
