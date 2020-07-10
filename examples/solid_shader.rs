@@ -8,11 +8,7 @@ use apur::renderer::{
     pipeline::{RenderPipeline, RenderShader},
     texture::Texture,
 };
-use futures::{
-    executor,
-    future::{self, FutureExt},
-    task::{Context, Poll},
-};
+use futures::{executor, FutureExt};
 
 const WIDTH: u16 = 800;
 const HEIGHT: u16 = 800;
@@ -72,8 +68,7 @@ struct GeneralDriver {
     ds_texture: Texture,
     global_bind_g: wgpu::BindGroup,
     element_bind_g: wgpu::BindGroup,
-    triangle_1: UncoloredTriangle,
-    triangle_2: UncoloredTriangle,
+    triangle: UncoloredTriangle,
 }
 
 impl GeneralDriver {
@@ -97,8 +92,7 @@ impl GeneralDriver {
             .with_buffer(&color)
             .build(device);
 
-        let triangle_1 = UncoloredTriangle::new(device);
-        let triangle_2 = UncoloredTriangle::new(device);
+        let triangle = UncoloredTriangle::new(device);
 
         Self {
             cam_controller,
@@ -106,13 +100,8 @@ impl GeneralDriver {
             ds_texture,
             global_bind_g,
             element_bind_g,
-            triangle_1,
-            triangle_2,
+            triangle,
         }
-    }
-
-    async fn buffer_updates(&mut self) {
-        self.cam_controller.update().await;
     }
 }
 
@@ -123,8 +112,13 @@ impl ApplicationDriver for GeneralDriver {
 
     fn update(&mut self, app: &mut Application) -> Vec<wgpu::CommandEncoder> {
         executor::block_on(apur::future::post_pending(
-            self.buffer_updates().boxed(),
-            || app.device().poll(wgpu::Maintain::Poll),
+            self.cam_controller.update().boxed(),
+            // difference between Poll and Wait:
+            // - Poll: resolve the futures for mappings that
+            //   are already done, and quit
+            // - Wait: wait for all mappings to be done
+            //   in order to resolve all pending futures
+            || app.device().poll(wgpu::Maintain::Wait),
         ));
 
         vec![]
@@ -176,9 +170,9 @@ impl ApplicationDriver for GeneralDriver {
 
             rpass.set_vertex_buffer(
                 0,
-                self.triangle_1.vertex_buffer().as_ref(),
+                self.triangle.vertex_buffer().as_ref(),
                 0,
-                self.triangle_1.vertex_buffer().size_bytes() as u64,
+                self.triangle.vertex_buffer().size_bytes() as u64,
             );
             rpass.draw(0..3, 0..1);
         }
