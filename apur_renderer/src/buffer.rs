@@ -1,5 +1,5 @@
 use log::trace;
-use zerocopy::AsBytes;
+use zerocopy::{AsBytes, FromBytes, LayoutVerified};
 
 use super::error as apur_error;
 
@@ -24,8 +24,10 @@ impl ManagedBuffer {
             .iter()
             .flat_map(|el| el.as_bytes().to_vec())
             .collect::<Vec<_>>();
-        let buffer = device
-            .create_buffer_with_data(byte_data.as_slice(), usage | wgpu::BufferUsage::MAP_WRITE);
+        let buffer = device.create_buffer_with_data(
+            byte_data.as_slice(),
+            usage | wgpu::BufferUsage::MAP_WRITE | wgpu::BufferUsage::MAP_READ,
+        );
 
         Self {
             buffer,
@@ -59,8 +61,19 @@ impl ManagedBuffer {
         buf_map.as_slice().copy_from_slice(byte_data.as_slice());
 
         trace!("Wrote to a mapped buffer {:?}", byte_data);
-        
+
         Ok(())
+    }
+
+    pub async fn read_data<T: FromBytes + Copy>(&mut self) -> apur_error::Result<Vec<T>> {
+        let buf_map = self
+            .buffer
+            .map_read(0, self.size_bytes as wgpu::BufferAddress)
+            .await
+            .expect("failed to map_read from the buffer");
+        LayoutVerified::new_slice(buf_map.as_slice())
+            .ok_or(apur_error::APURRendererError::BufferTypeInterpretationFailed)
+            .map(|l| l.into_slice().to_owned())
     }
 
     pub fn size_bytes(&self) -> usize {

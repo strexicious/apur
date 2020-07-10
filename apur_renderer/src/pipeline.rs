@@ -21,17 +21,21 @@ impl RenderPipeline {
     pub fn new<T: RenderShader>(device: &wgpu::Device) -> Self {
         let global_layout = device.create_bind_group_layout(&T::GLOBAL_LAYOUT_DESC);
         let element_layout = device.create_bind_group_layout(&T::ELEMENT_LAYOUT_DESC);
-    
+
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[&global_layout, &element_layout],
         });
 
-        let vmodule = device.create_shader_module(&wgpu::read_spirv(
-            std::io::Cursor::new(T::VERTEX_MODULE)).expect("failed to create vertex shader spir-v"));
-    
-        let fmodule = device.create_shader_module(&wgpu::read_spirv(
-            std::io::Cursor::new(T::FRAGMENT_MODULE)).expect("failed to create fragment shader spir-v"));
-    
+        let vmodule = device.create_shader_module(
+            &wgpu::read_spirv(std::io::Cursor::new(T::VERTEX_MODULE))
+                .expect("failed to create vertex shader spir-v"),
+        );
+
+        let fmodule = device.create_shader_module(
+            &wgpu::read_spirv(std::io::Cursor::new(T::FRAGMENT_MODULE))
+                .expect("failed to create fragment shader spir-v"),
+        );
+
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
             vertex_stage: wgpu::ProgrammableStageDescriptor {
@@ -89,6 +93,56 @@ impl RenderPipeline {
 
 impl AsRef<wgpu::RenderPipeline> for RenderPipeline {
     fn as_ref(&self) -> &wgpu::RenderPipeline {
+        &self.pipeline
+    }
+}
+
+pub trait ComputeShader {
+    const THE_ONLY_BG_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static>;
+    const THE_ONLY_COMPUTE_MODULE: &'static [u8];
+}
+
+pub struct ComputePipeline {
+    pipeline: wgpu::ComputePipeline,
+    the_only_bg_layout: wgpu::BindGroupLayout,
+}
+
+impl ComputePipeline {
+    pub fn new<T: ComputeShader>(device: &wgpu::Device) -> Self {
+        let the_only_bg_layout = device.create_bind_group_layout(&T::THE_ONLY_BG_LAYOUT_DESC);
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            bind_group_layouts: &[&the_only_bg_layout],
+        });
+
+        let cmodule = device.create_shader_module(
+            &wgpu::read_spirv(std::io::Cursor::new(T::THE_ONLY_COMPUTE_MODULE))
+                .expect("failed to create vertex shader spir-v"),
+        );
+
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            layout: &pipeline_layout,
+            compute_stage: {
+                wgpu::ProgrammableStageDescriptor {
+                    module: &cmodule,
+                    entry_point: "main",
+                }
+            },
+        });
+
+        Self {
+            pipeline,
+            the_only_bg_layout,
+        }
+    }
+
+    pub fn the_only_bg_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.the_only_bg_layout
+    }
+}
+
+impl AsRef<wgpu::ComputePipeline> for ComputePipeline {
+    fn as_ref(&self) -> &wgpu::ComputePipeline {
         &self.pipeline
     }
 }

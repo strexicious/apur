@@ -22,3 +22,7 @@ members = [
 [[example]]
 name = "solid_shader"
 path = "examples/solid_shader.rs"
+
+[[example]]
+name = "comp_shader"
+path = "examples/comp_shader.rs"
