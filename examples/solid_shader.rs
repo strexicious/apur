@@ -1,9 +1,10 @@
 use apur::model::prefabs::UncoloredTriangle;
 use apur::renderer::{
     application::{Application, ApplicationDriver},
-    bind_group::BindGroupBuilder,
+    bind_group::{BindGroupLayout, BindGroupLayoutBuilder},
     buffer::ManagedBuffer,
     camera::{Camera, CameraController},
+    error as apur_error,
     event_handler::EventHandler,
     pipeline::{RenderPipeline, RenderShader},
     texture::Texture,
@@ -13,38 +14,30 @@ use futures::{executor, FutureExt};
 const WIDTH: u16 = 800;
 const HEIGHT: u16 = 800;
 
-struct SolidShader;
+struct SolidShader {
+    layouts: Vec<BindGroupLayout>,
+}
+
+impl SolidShader {
+    fn new(device: &wgpu::Device) -> Self {
+        let layout = BindGroupLayoutBuilder::new()
+            .with_binding(
+                wgpu::ShaderStage::VERTEX,
+                wgpu::BindingType::UniformBuffer { dynamic: false },
+            )
+            .with_binding(
+                wgpu::ShaderStage::FRAGMENT,
+                wgpu::BindingType::UniformBuffer { dynamic: false },
+            )
+            .build(device);
+
+        let layouts = vec![layout];
+
+        Self { layouts }
+    }
+}
 
 impl RenderShader for SolidShader {
-    const GLOBAL_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static> =
-        wgpu::BindGroupLayoutDescriptor {
-            bindings: &[
-                // camera data
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX,
-                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                },
-            ],
-            label: Some("SolidShader GLOBAL_LAYOUT_DESC"),
-        };
-
-    const ELEMENT_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static> =
-        wgpu::BindGroupLayoutDescriptor {
-            bindings: &[
-                // color data
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                },
-            ],
-            label: Some("SolidShader ELEMENT_LAYOUT_DESC"),
-        };
-
-    const VERTEX_MODULE: &'static [u8] = include_bytes!("../res/shaders/solid.vert.spv");
-    const FRAGMENT_MODULE: &'static [u8] = include_bytes!("../res/shaders/solid.frag.spv");
-
     const VERTEX_STATE_DESC: wgpu::VertexStateDescriptor<'static> = wgpu::VertexStateDescriptor {
         index_format: wgpu::IndexFormat::Uint32,
         vertex_buffers: &[wgpu::VertexBufferDescriptor {
@@ -60,19 +53,30 @@ impl RenderShader for SolidShader {
             ],
         }],
     };
+
+    fn layouts(&self) -> &[BindGroupLayout] {
+        &self.layouts
+    }
+
+    fn vertex_module(&self) -> &[u8] {
+        include_bytes!("../res/shaders/solid.vert.spv")
+    }
+
+    fn fragment_module(&self) -> &[u8] {
+        include_bytes!("../res/shaders/solid.frag.spv")
+    }
 }
 
 struct GeneralDriver {
     cam_controller: CameraController,
     pipe: RenderPipeline,
     ds_texture: Texture,
-    global_bind_g: wgpu::BindGroup,
-    element_bind_g: wgpu::BindGroup,
+    bind_group: wgpu::BindGroup,
     triangle: UncoloredTriangle,
 }
 
 impl GeneralDriver {
-    fn new(device: &wgpu::Device) -> Self {
+    fn new(device: &wgpu::Device) -> apur_error::Result<Self> {
         let mut camera = Camera::new(WIDTH as u32, HEIGHT as u32);
         camera.move_pos(-3.0);
         let cam_controller = CameraController::new(device, camera);
@@ -80,28 +84,26 @@ impl GeneralDriver {
         let color =
             ManagedBuffer::from_data(device, wgpu::BufferUsage::UNIFORM, &[0.7, 0.3, 0.5, 0.0]);
 
-        let pipe = RenderPipeline::new::<SolidShader>(device);
-        let ds_texture = Texture::new_depth(device, WIDTH as u32, HEIGHT as u32);
+        let shader = SolidShader::new(device);
 
-        let global_bind_g = BindGroupBuilder::from_layout(pipe.global_layout())
-            .with_tag("global_bind_group")
-            .with_buffer(cam_controller.buffer())
-            .build(device);
-        let element_bind_g = BindGroupBuilder::from_layout(pipe.element_layout())
-            .with_tag("element_bind_group")
-            .with_buffer(&color)
-            .build(device);
+        let bind_group = shader.layouts()[0]
+            .to_bind_group_builder()
+            .with_buffer(cam_controller.buffer())?
+            .with_buffer(&color)?
+            .build(device)?;
+
+        let pipe = RenderPipeline::new(device, shader);
+        let ds_texture = Texture::new_depth(device, WIDTH as u32, HEIGHT as u32);
 
         let triangle = UncoloredTriangle::new(device);
 
-        Self {
+        Ok(Self {
             cam_controller,
             pipe,
             ds_texture,
-            global_bind_g,
-            element_bind_g,
+            bind_group,
             triangle,
-        }
+        })
     }
 }
 
@@ -165,8 +167,7 @@ impl ApplicationDriver for GeneralDriver {
             });
 
             rpass.set_pipeline(self.pipe.as_ref());
-            rpass.set_bind_group(0, &self.global_bind_g, &[]);
-            rpass.set_bind_group(1, &self.element_bind_g, &[]);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
 
             rpass.set_vertex_buffer(
                 0,
@@ -187,5 +188,5 @@ fn main() {
     let app = executor::block_on(Application::new("solid-shader example", WIDTH, HEIGHT)).unwrap();
     let driver = GeneralDriver::new(app.device());
 
-    app.run(driver);
+    app.run(driver.unwrap());
 }

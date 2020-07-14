@@ -1,38 +1,36 @@
-/// Well we could make Shader a dynamic object,
-/// but for now lets just say that shaders will
-/// be created at compile time, and these constants
-/// in the traits are like a "constant functions"
-/// See solid_shader example for usage.
+use super::bind_group::BindGroupLayout;
+
 pub trait RenderShader {
-    const GLOBAL_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static>;
-    const ELEMENT_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static>;
-    const VERTEX_MODULE: &'static [u8];
-    const FRAGMENT_MODULE: &'static [u8];
     const VERTEX_STATE_DESC: wgpu::VertexStateDescriptor<'static>;
+
+    fn layouts(&self) -> &[BindGroupLayout];
+    fn vertex_module(&self) -> &[u8];
+    fn fragment_module(&self) -> &[u8];
 }
 
 pub struct RenderPipeline {
     pipeline: wgpu::RenderPipeline,
-    global_layout: wgpu::BindGroupLayout,
-    element_layout: wgpu::BindGroupLayout,
 }
 
 impl RenderPipeline {
-    pub fn new<T: RenderShader>(device: &wgpu::Device) -> Self {
-        let global_layout = device.create_bind_group_layout(&T::GLOBAL_LAYOUT_DESC);
-        let element_layout = device.create_bind_group_layout(&T::ELEMENT_LAYOUT_DESC);
+    pub fn new<S: RenderShader>(device: &wgpu::Device, shader: S) -> Self {
+        let layouts = shader
+            .layouts()
+            .iter()
+            .map(|l| l.as_ref())
+            .collect::<Vec<_>>();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&global_layout, &element_layout],
+            bind_group_layouts: layouts.as_slice(),
         });
 
         let vmodule = device.create_shader_module(
-            &wgpu::read_spirv(std::io::Cursor::new(T::VERTEX_MODULE))
+            &wgpu::read_spirv(std::io::Cursor::new(shader.vertex_module()))
                 .expect("failed to create vertex shader spir-v"),
         );
 
         let fmodule = device.create_shader_module(
-            &wgpu::read_spirv(std::io::Cursor::new(T::FRAGMENT_MODULE))
+            &wgpu::read_spirv(std::io::Cursor::new(shader.fragment_module()))
                 .expect("failed to create fragment shader spir-v"),
         );
 
@@ -69,25 +67,13 @@ impl RenderPipeline {
                 stencil_read_mask: !0,
                 stencil_write_mask: !0,
             }),
-            vertex_state: T::VERTEX_STATE_DESC.clone(),
+            vertex_state: S::VERTEX_STATE_DESC.clone(),
             sample_count: 1,
             sample_mask: !0,
             alpha_to_coverage_enabled: false,
         });
 
-        Self {
-            pipeline,
-            global_layout,
-            element_layout,
-        }
-    }
-
-    pub fn global_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.global_layout
-    }
-
-    pub fn element_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.element_layout
+        Self { pipeline }
     }
 }
 
@@ -98,25 +84,28 @@ impl AsRef<wgpu::RenderPipeline> for RenderPipeline {
 }
 
 pub trait ComputeShader {
-    const THE_ONLY_BG_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static>;
-    const THE_ONLY_COMPUTE_MODULE: &'static [u8];
+    fn layouts(&self) -> &[BindGroupLayout];
+    fn compute_module(&self) -> &[u8];
 }
 
 pub struct ComputePipeline {
     pipeline: wgpu::ComputePipeline,
-    the_only_bg_layout: wgpu::BindGroupLayout,
 }
 
 impl ComputePipeline {
-    pub fn new<T: ComputeShader>(device: &wgpu::Device) -> Self {
-        let the_only_bg_layout = device.create_bind_group_layout(&T::THE_ONLY_BG_LAYOUT_DESC);
+    pub fn new(device: &wgpu::Device, shader: impl ComputeShader) -> Self {
+        let layouts = shader
+            .layouts()
+            .iter()
+            .map(|l| l.as_ref())
+            .collect::<Vec<_>>();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&the_only_bg_layout],
+            bind_group_layouts: layouts.as_slice(),
         });
 
         let cmodule = device.create_shader_module(
-            &wgpu::read_spirv(std::io::Cursor::new(T::THE_ONLY_COMPUTE_MODULE))
+            &wgpu::read_spirv(std::io::Cursor::new(shader.compute_module()))
                 .expect("failed to create vertex shader spir-v"),
         );
 
@@ -130,14 +119,7 @@ impl ComputePipeline {
             },
         });
 
-        Self {
-            pipeline,
-            the_only_bg_layout,
-        }
-    }
-
-    pub fn the_only_bg_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.the_only_bg_layout
+        Self { pipeline }
     }
 }
 

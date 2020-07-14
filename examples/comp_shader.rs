@@ -1,37 +1,45 @@
 use apur::renderer::{
     application::{Application, ApplicationDriver},
-    bind_group::BindGroupBuilder,
+    bind_group::{BindGroupLayout, BindGroupLayoutBuilder},
     buffer::ManagedBuffer,
+    error as apur_error,
     event_handler::EventHandler,
     pipeline::{ComputePipeline, ComputeShader},
 };
 use futures::{executor, FutureExt};
-use log::debug;
 
 const WIDTH: u16 = 800;
 const HEIGHT: u16 = 800;
 
-struct CollatzShader;
+struct CollatzShader {
+    layouts: Vec<BindGroupLayout>,
+}
+
+impl CollatzShader {
+    fn new(device: &wgpu::Device) -> Self {
+        let layout = BindGroupLayoutBuilder::new()
+            .with_binding(
+                wgpu::ShaderStage::COMPUTE,
+                wgpu::BindingType::StorageBuffer {
+                    dynamic: false,
+                    readonly: false,
+                },
+            )
+            .build(device);
+        let layouts = vec![layout];
+
+        Self { layouts }
+    }
+}
 
 impl ComputeShader for CollatzShader {
-    const THE_ONLY_BG_LAYOUT_DESC: wgpu::BindGroupLayoutDescriptor<'static> =
-        wgpu::BindGroupLayoutDescriptor {
-            bindings: &[
-                // camera data
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::COMPUTE,
-                    ty: wgpu::BindingType::StorageBuffer {
-                        dynamic: false,
-                        readonly: false,
-                    },
-                },
-            ],
-            label: Some("CollatzShader Layout"),
-        };
+    fn layouts(&self) -> &[BindGroupLayout] {
+        &self.layouts
+    }
 
-    const THE_ONLY_COMPUTE_MODULE: &'static [u8] =
-        include_bytes!("../res/shaders/collatz.comp.spv");
+    fn compute_module(&self) -> &[u8] {
+        include_bytes!("../res/shaders/collatz.comp.spv")
+    }
 }
 
 struct GeneralDriver {
@@ -42,25 +50,26 @@ struct GeneralDriver {
 }
 
 impl GeneralDriver {
-    fn new(device: &wgpu::Device) -> Self {
+    fn new(device: &wgpu::Device) -> apur_error::Result<Self> {
         let nums =
             ManagedBuffer::from_data::<u32>(device, wgpu::BufferUsage::STORAGE, &[1, 4, 3, 295]);
 
-        let pipe = ComputePipeline::new::<CollatzShader>(device);
+        let shader = CollatzShader::new(device);
+        let bind_group = shader.layouts()[0]
+            .to_bind_group_builder()
+            .with_buffer(&nums)?
+            .build(device)?;
 
-        let bind_group = BindGroupBuilder::from_layout(pipe.the_only_bg_layout())
-            .with_tag("the_only_bind_group")
-            .with_buffer(&nums)
-            .build(device);
+        let pipe = ComputePipeline::new(device, shader);
 
         let done = false;
 
-        Self {
+        Ok(Self {
             pipe,
             nums,
             bind_group,
             done,
-        }
+        })
     }
 }
 
@@ -92,7 +101,7 @@ impl ApplicationDriver for GeneralDriver {
     fn render(
         &mut self,
         app: &mut Application,
-        frame: &wgpu::SwapChainOutput,
+        _frame: &wgpu::SwapChainOutput,
     ) -> Vec<wgpu::CommandEncoder> {
         if !self.done {
             let output = executor::block_on(apur::future::post_pending(
@@ -115,5 +124,5 @@ fn main() {
     let app = executor::block_on(Application::new("solid-shader example", WIDTH, HEIGHT)).unwrap();
     let driver = GeneralDriver::new(app.device());
 
-    app.run(driver);
+    app.run(driver.unwrap());
 }

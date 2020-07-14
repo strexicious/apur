@@ -2,7 +2,7 @@
 
 layout(location = 0) out vec4 out_color;
 
-layout(set = 1, binding = 0) uniform Color {
+layout(set = 0, binding = 1) uniform Color {
     vec3 albedo;
 };
 
