@@ -2,6 +2,8 @@
 for %%s in (
     solid.vert
     solid.frag
+    transparent.vert
+    transparent.frag
     combined.vert
     combined.frag
     collatz.comp
