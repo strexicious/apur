@@ -1,4 +1,5 @@
+pub mod lights;
+pub mod mesh;
 pub mod prefabs;
-pub mod loader;
 
 pub use tobj;

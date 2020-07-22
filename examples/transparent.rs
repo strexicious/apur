@@ -1,4 +1,7 @@
-use apur::model::{loader, prefabs::UncoloredCube};
+use apur::model::{
+    mesh::{self, Mesh},
+    prefabs::UncoloredCube,
+};
 use apur::renderer::{
     application::{Application, ApplicationDriver},
     bind_group::{BindGroupLayout, BindGroupLayoutBuilder},
@@ -79,7 +82,7 @@ struct GeneralDriver {
     pipe: RenderPipeline,
     ds_texture: Texture,
     cam_bind_group: wgpu::BindGroup,
-    cup: (ManagedBuffer, wgpu::BindGroup),
+    cup: (Mesh, wgpu::BindGroup),
     cube1: (UncoloredCube, wgpu::BindGroup),
     cube2: (UncoloredCube, wgpu::BindGroup),
 }
@@ -97,7 +100,7 @@ impl GeneralDriver {
             .with_buffer(cam_controller.buffer())?
             .build(device)?;
 
-        let cup_model = loader::load_raw_model_positions(device, "fab_cup");
+        let mut cup_model = mesh::load_model(device, "fab_cup");
 
         let cup_bg = shader.layouts()[1]
             .to_bind_group_builder()
@@ -141,7 +144,7 @@ impl GeneralDriver {
             ))?
             .build(device)?;
 
-        let cup = (cup_model, cup_bg);
+        let cup = (cup_model.pop().unwrap(), cup_bg);
         let cube1 = (UncoloredCube::new(device), cube1_bg);
         let cube2 = (UncoloredCube::new(device), cube2_bg);
 
@@ -223,8 +226,18 @@ impl ApplicationDriver for GeneralDriver {
             rpass.set_bind_group(0, &self.cam_bind_group, &[]);
 
             rpass.set_bind_group(1, &self.cup.1, &[]);
-            rpass.set_vertex_buffer(0, self.cup.0.as_ref(), 0, self.cup.0.size_bytes() as u64);
-            rpass.draw(0..self.cup.0.size_bytes() as u32 / 4 / 3, 0..1);
+            rpass.set_vertex_buffer(
+                0,
+                self.cup.0.positions_buffer().as_ref(),
+                0,
+                self.cup.0.positions_buffer().size_bytes() as u64,
+            );
+            rpass.set_index_buffer(
+                self.cup.0.indices_buffer().as_ref(),
+                0,
+                self.cup.0.indices_buffer().size_bytes() as u64,
+            );
+            rpass.draw_indexed(0..self.cup.0.indices_buffer().size_bytes() as u32 / 4, 0, 0..1);
 
             let cube1_buf = self.cube1.0.vertex_buffer();
             rpass.set_bind_group(1, &self.cube1.1, &[]);

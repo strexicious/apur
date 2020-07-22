@@ -2,6 +2,8 @@
 for %%s in (
     solid.vert
     solid.frag
+    shadow.vert
+    shadow.frag
     transparent.vert
     transparent.frag
     combined.vert
