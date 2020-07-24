@@ -168,7 +168,7 @@ impl ApplicationDriver for GeneralDriver {
         Some(&mut self.cam_controller)
     }
 
-    fn update(&mut self, app: &mut Application) -> Vec<wgpu::CommandEncoder> {
+    fn update(&mut self, app: &mut Application) -> Vec<wgpu::CommandBuffer> {
         executor::block_on(apur::future::post_pending(
             self.cam_controller.update().boxed(),
             // difference between Poll and Wait:
@@ -186,7 +186,7 @@ impl ApplicationDriver for GeneralDriver {
         &mut self,
         app: &mut Application,
         frame: &wgpu::SwapChainOutput,
-    ) -> Vec<wgpu::CommandEncoder> {
+    ) -> Vec<wgpu::CommandBuffer> {
         let mut encoder = app
             .device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -250,7 +250,7 @@ impl ApplicationDriver for GeneralDriver {
             rpass.draw(0..cube2_buf.size_bytes() as u32 / 4 / 3, 0..1);
         }
 
-        vec![encoder]
+        vec![encoder.finish()]
     }
 }
 

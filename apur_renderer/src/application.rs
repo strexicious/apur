@@ -13,12 +13,12 @@ use super::event_handler::EventHandler;
 /// handling events and updating during that time.
 pub trait ApplicationDriver: 'static {
     fn current_event_handler(&mut self, app: &mut Application) -> Option<&mut dyn EventHandler>;
-    fn update(&mut self, app: &mut Application) -> Vec<wgpu::CommandEncoder>;
+    fn update(&mut self, app: &mut Application) -> Vec<wgpu::CommandBuffer>;
     fn render(
         &mut self,
         app: &mut Application,
         frame: &wgpu::SwapChainOutput,
-    ) -> Vec<wgpu::CommandEncoder>;
+    ) -> Vec<wgpu::CommandBuffer>;
 }
 
 pub struct Application {
@@ -126,15 +126,8 @@ impl Application {
                     _ => {}
                 },
                 Event::MainEventsCleared => {
-                    let encoders = driver.update(&mut self);
-                    self.queue.submit(
-                        encoders
-                            .into_iter()
-                            .map(|e| e.finish())
-                            .collect::<Vec<_>>()
-                            .as_slice(),
-                    );
-
+                    let cmd_buffers = driver.update(&mut self);
+                    self.queue.submit(&cmd_buffers);
                     self.window.request_redraw();
                 }
                 Event::RedrawRequested(_) => {
@@ -142,14 +135,8 @@ impl Application {
                         .swapchain
                         .get_next_texture()
                         .expect("Failed to get next frame from swapchain");
-                    let encoders = driver.render(&mut self, &next_frame);
-                    self.queue.submit(
-                        encoders
-                            .into_iter()
-                            .map(|e| e.finish())
-                            .collect::<Vec<_>>()
-                            .as_slice(),
-                    );
+                    let cmd_buffers = driver.render(&mut self, &next_frame);
+                    self.queue.submit(&cmd_buffers);
                 }
                 _ => {}
             }

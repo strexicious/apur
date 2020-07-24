@@ -78,7 +78,7 @@ impl ApplicationDriver for GeneralDriver {
         None
     }
 
-    fn update(&mut self, app: &mut Application) -> Vec<wgpu::CommandEncoder> {
+    fn update(&mut self, app: &mut Application) -> Vec<wgpu::CommandBuffer> {
         if !self.done {
             let mut encoder =
                 app.device()
@@ -92,7 +92,7 @@ impl ApplicationDriver for GeneralDriver {
                 cpass.set_bind_group(0, &self.bind_group, &[]);
                 cpass.dispatch(4, 1, 1);
             }
-            return vec![encoder];
+            return vec![encoder.finish()];
         }
 
         vec![]
@@ -102,7 +102,7 @@ impl ApplicationDriver for GeneralDriver {
         &mut self,
         app: &mut Application,
         _frame: &wgpu::SwapChainOutput,
-    ) -> Vec<wgpu::CommandEncoder> {
+    ) -> Vec<wgpu::CommandBuffer> {
         if !self.done {
             let output = executor::block_on(apur::future::post_pending(
                 self.nums.read_data::<u32>().boxed(),
