@@ -1,11 +1,19 @@
-pub struct Texture {
-    _texture: wgpu::Texture,
+pub trait Texture {
+    fn view(&self) -> &wgpu::TextureView;
+}
+
+pub trait CopyableTexture {
+    fn copy_view(&mut self) -> &mut wgpu::TextureCopyView;
+}
+
+pub struct DepthTexture {
+    texture: wgpu::Texture,
     default_view: wgpu::TextureView,
 }
 
-impl Texture {
-    pub fn new_depth(device: &wgpu::Device, width: u32, height: u32) -> Self {
-        let _texture = device.create_texture(&wgpu::TextureDescriptor {
+impl DepthTexture {
+    pub fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
                 width,
                 height,
@@ -20,15 +28,54 @@ impl Texture {
             label: Some("Depth texture"),
         });
 
-        let default_view = _texture.create_default_view();
+        let default_view = texture.create_default_view();
 
         Self {
-            _texture,
+            texture,
             default_view,
         }
     }
+}
 
-    pub fn view(&self) -> &wgpu::TextureView {
+impl Texture for DepthTexture {
+    fn view(&self) -> &wgpu::TextureView {
+        &self.default_view
+    }
+}
+
+pub struct FragmentOutputTexture {
+    texture: wgpu::Texture,
+    default_view: wgpu::TextureView,
+}
+
+impl FragmentOutputTexture {
+    pub fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth: 1,
+            },
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba32Float,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            label: Some("rgba32 out"),
+        });
+
+        let default_view = texture.create_default_view();
+
+        Self {
+            texture,
+            default_view,
+        }
+    }
+}
+
+impl Texture for FragmentOutputTexture {
+    fn view(&self) -> &wgpu::TextureView {
         &self.default_view
     }
 }

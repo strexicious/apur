@@ -2,6 +2,7 @@ use super::bind_group::BindGroupLayout;
 
 pub trait RenderShader {
     const VERTEX_STATE_DESC: wgpu::VertexStateDescriptor<'static>;
+    const COLOR_STATE_DESCS: &'static [wgpu::ColorStateDescriptor];
 
     fn layouts(&self) -> &[BindGroupLayout];
     fn vertex_module(&self) -> &[u8];
@@ -52,16 +53,7 @@ impl RenderPipeline {
                 depth_bias_clamp: 0.0,
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[wgpu::ColorStateDescriptor {
-                format: wgpu::TextureFormat::Bgra8UnormSrgb,
-                color_blend: wgpu::BlendDescriptor {
-                    src_factor: wgpu::BlendFactor::SrcAlpha,
-                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                    operation: wgpu::BlendOperation::Add,
-                },
-                alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
+            color_states: S::COLOR_STATE_DESCS,
             depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: true,
@@ -71,7 +63,7 @@ impl RenderPipeline {
                 stencil_read_mask: !0,
                 stencil_write_mask: !0,
             }),
-            vertex_state: S::VERTEX_STATE_DESC.clone(),
+            vertex_state: S::VERTEX_STATE_DESC,
             sample_count: 1,
             sample_mask: !0,
             alpha_to_coverage_enabled: false,

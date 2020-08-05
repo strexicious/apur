@@ -10,7 +10,7 @@ use apur::renderer::{
     error as apur_error,
     event_handler::EventHandler,
     pipeline::{RenderPipeline, RenderShader},
-    texture::Texture,
+    texture::{DepthTexture, Texture},
 };
 use futures::{executor, FutureExt};
 
@@ -64,6 +64,18 @@ impl RenderShader for TransparentShader {
         }],
     };
 
+    const COLOR_STATE_DESCS: &'static [wgpu::ColorStateDescriptor] =
+        &[wgpu::ColorStateDescriptor {
+            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+            color_blend: wgpu::BlendDescriptor {
+                src_factor: wgpu::BlendFactor::SrcAlpha,
+                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha_blend: wgpu::BlendDescriptor::REPLACE,
+            write_mask: wgpu::ColorWrite::ALL,
+        }];
+
     fn layouts(&self) -> &[BindGroupLayout] {
         &self.layouts
     }
@@ -80,7 +92,7 @@ impl RenderShader for TransparentShader {
 struct GeneralDriver {
     cam_controller: CameraController,
     pipe: RenderPipeline,
-    ds_texture: Texture,
+    ds_texture: DepthTexture,
     cam_bind_group: wgpu::BindGroup,
     cup: (Mesh, wgpu::BindGroup),
     cube1: (UncoloredCube, wgpu::BindGroup),
@@ -149,7 +161,7 @@ impl GeneralDriver {
         let cube2 = (UncoloredCube::new(device), cube2_bg);
 
         let pipe = RenderPipeline::new(device, shader);
-        let ds_texture = Texture::new_depth(device, WIDTH as u32, HEIGHT as u32);
+        let ds_texture = DepthTexture::new(device, WIDTH as u32, HEIGHT as u32);
 
         Ok(Self {
             cam_controller,
@@ -237,7 +249,11 @@ impl ApplicationDriver for GeneralDriver {
                 0,
                 self.cup.0.indices_buffer().size_bytes() as u64,
             );
-            rpass.draw_indexed(0..self.cup.0.indices_buffer().size_bytes() as u32 / 4, 0, 0..1);
+            rpass.draw_indexed(
+                0..self.cup.0.indices_buffer().size_bytes() as u32 / 4,
+                0,
+                0..1,
+            );
 
             let cube1_buf = self.cube1.0.vertex_buffer();
             rpass.set_bind_group(1, &self.cube1.1, &[]);

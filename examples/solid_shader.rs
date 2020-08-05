@@ -7,7 +7,7 @@ use apur::renderer::{
     error as apur_error,
     event_handler::EventHandler,
     pipeline::{RenderPipeline, RenderShader},
-    texture::Texture,
+    texture::{DepthTexture, Texture},
 };
 use futures::{executor, FutureExt};
 
@@ -54,6 +54,18 @@ impl RenderShader for SolidShader {
         }],
     };
 
+    const COLOR_STATE_DESCS: &'static [wgpu::ColorStateDescriptor] =
+        &[wgpu::ColorStateDescriptor {
+            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+            color_blend: wgpu::BlendDescriptor {
+                src_factor: wgpu::BlendFactor::SrcAlpha,
+                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha_blend: wgpu::BlendDescriptor::REPLACE,
+            write_mask: wgpu::ColorWrite::ALL,
+        }];
+
     fn layouts(&self) -> &[BindGroupLayout] {
         &self.layouts
     }
@@ -70,7 +82,7 @@ impl RenderShader for SolidShader {
 struct GeneralDriver {
     cam_controller: CameraController,
     pipe: RenderPipeline,
-    ds_texture: Texture,
+    ds_texture: DepthTexture,
     bind_group: wgpu::BindGroup,
     triangle: UncoloredTriangle,
 }
@@ -93,7 +105,7 @@ impl GeneralDriver {
             .build(device)?;
 
         let pipe = RenderPipeline::new(device, shader);
-        let ds_texture = Texture::new_depth(device, WIDTH as u32, HEIGHT as u32);
+        let ds_texture = DepthTexture::new(device, WIDTH as u32, HEIGHT as u32);
 
         let triangle = UncoloredTriangle::new(device);
 

@@ -124,7 +124,7 @@ impl<'a> BindGroupBuilder<'a> {
         Ok(self)
     }
 
-    pub fn with_texture(mut self, texture: &'a Texture) -> apur_error::Result<Self> {
+    pub fn with_texture(mut self, texture: &'a impl Texture) -> apur_error::Result<Self> {
         if self.bindings.len() == self.layout.entries.len() {
             return Err(apur_error::APURRendererError::NumOfBindingsOverflowed);
         }
