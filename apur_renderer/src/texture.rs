@@ -43,6 +43,43 @@ impl Texture for DepthTexture {
     }
 }
 
+pub struct DepthStencilTexture {
+    texture: wgpu::Texture,
+    default_view: wgpu::TextureView,
+}
+
+impl DepthStencilTexture {
+    pub fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth: 1,
+            },
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24PlusStencil8,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            label: Some("Depth-Stencil texture"),
+        });
+
+        let default_view = texture.create_default_view();
+
+        Self {
+            texture,
+            default_view,
+        }
+    }
+}
+
+impl Texture for DepthStencilTexture {
+    fn view(&self) -> &wgpu::TextureView {
+        &self.default_view
+    }
+}
+
 pub struct FragmentOutputTexture {
     texture: wgpu::Texture,
     default_view: wgpu::TextureView,

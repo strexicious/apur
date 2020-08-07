@@ -3,6 +3,7 @@ use super::bind_group::BindGroupLayout;
 pub trait RenderShader {
     const VERTEX_STATE_DESC: wgpu::VertexStateDescriptor<'static>;
     const COLOR_STATE_DESCS: &'static [wgpu::ColorStateDescriptor];
+    const DEPTH_STENCIL_DESC: Option<wgpu::DepthStencilStateDescriptor>;
 
     fn layouts(&self) -> &[BindGroupLayout];
     fn vertex_module(&self) -> &[u8];
@@ -54,15 +55,7 @@ impl RenderPipeline {
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
             color_states: S::COLOR_STATE_DESCS,
-            depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
-                format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::LessEqual,
-                stencil_front: wgpu::StencilStateFaceDescriptor::default(),
-                stencil_back: wgpu::StencilStateFaceDescriptor::default(),
-                stencil_read_mask: !0,
-                stencil_write_mask: !0,
-            }),
+            depth_stencil_state: S::DEPTH_STENCIL_DESC,
             vertex_state: S::VERTEX_STATE_DESC,
             sample_count: 1,
             sample_mask: !0,

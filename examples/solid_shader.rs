@@ -66,6 +66,17 @@ impl RenderShader for SolidShader {
             write_mask: wgpu::ColorWrite::ALL,
         }];
 
+    const DEPTH_STENCIL_DESC: Option<wgpu::DepthStencilStateDescriptor> =
+        Some(wgpu::DepthStencilStateDescriptor {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::LessEqual,
+            stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
+            stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
+            stencil_read_mask: !0,
+            stencil_write_mask: !0,
+        });
+
     fn layouts(&self) -> &[BindGroupLayout] {
         &self.layouts
     }
