@@ -1,3 +1,4 @@
+use std::path::Path;
 use apur::model::prefabs::UncoloredTriangle;
 use apur::renderer::{
     application::{Application, ApplicationDriver},
@@ -81,12 +82,12 @@ impl RenderShader for SolidShader {
         &self.layouts
     }
 
-    fn vertex_module(&self) -> &[u8] {
-        include_bytes!("../res/shaders/solid.vert.spv")
+    fn vertex_module_path(&self) -> &Path {
+        "res/shaders/solid.vert.spv".as_ref()
     }
 
-    fn fragment_module(&self) -> &[u8] {
-        include_bytes!("../res/shaders/solid.frag.spv")
+    fn fragment_module_path(&self) -> &Path {
+        "res/shaders/solid.frag.spv".as_ref()
     }
 }
 
@@ -115,7 +116,7 @@ impl GeneralDriver {
             .with_buffer(&color)?
             .build(device)?;
 
-        let pipe = RenderPipeline::new(device, shader);
+        let pipe = RenderPipeline::new(device, &shader).unwrap();
         let ds_texture = DepthTexture::new(device, WIDTH as u32, HEIGHT as u32);
 
         let triangle = UncoloredTriangle::new(device);

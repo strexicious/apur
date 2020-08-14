@@ -16,6 +16,7 @@ glam = "0.8.6"
 
 [dev-dependencies]
 criterion = "0.3.3"
+notify = "5.0.0-pre.3"
 
 [workspace]
 members = [

@@ -1,3 +1,4 @@
+use std::path::Path;
 use apur::model::{
     mesh::{self, Mesh},
     prefabs::UncoloredCube,
@@ -91,12 +92,12 @@ impl RenderShader for TransparentShader {
         &self.layouts
     }
 
-    fn vertex_module(&self) -> &[u8] {
-        include_bytes!("../res/shaders/transparent.vert.spv")
+    fn vertex_module_path(&self) -> &Path {
+        "res/shaders/transparent.vert.spv".as_ref()
     }
 
-    fn fragment_module(&self) -> &[u8] {
-        include_bytes!("../res/shaders/transparent.frag.spv")
+    fn fragment_module_path(&self) -> &Path {
+        "res/shaders/transparent.frag.spv".as_ref()
     }
 }
 
@@ -171,7 +172,7 @@ impl GeneralDriver {
         let cube1 = (UncoloredCube::new(device), cube1_bg);
         let cube2 = (UncoloredCube::new(device), cube2_bg);
 
-        let pipe = RenderPipeline::new(device, shader);
+        let pipe = RenderPipeline::new(device, &shader).unwrap();
         let ds_texture = DepthTexture::new(device, WIDTH as u32, HEIGHT as u32);
 
         Ok(Self {

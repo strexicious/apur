@@ -7,4 +7,5 @@ pub enum APURRendererError {
     BindingResourceTypeUnmatched,
     NumOfBindingsOverflowed,
     NumOfBindingsUnderflowed,
+    ErrorOpeningShaderSPV,
 }

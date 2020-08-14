@@ -78,6 +78,7 @@ impl Camera {
         self.forward = glam::vec3(sinx * cosy, -siny, -cosx * cosy).normalize();
     }
 
+    /// Move in camera space
     pub fn move_pos(&mut self, units: f32) {
         self.position += units * self.forward;
     }

@@ -1,4 +1,7 @@
 use super::bind_group::BindGroupLayout;
+use super::error::{self, APURRendererError};
+use std::fs::File;
+use std::path::Path;
 
 pub trait RenderShader {
     const VERTEX_STATE_DESC: wgpu::VertexStateDescriptor<'static>;
@@ -6,8 +9,8 @@ pub trait RenderShader {
     const DEPTH_STENCIL_DESC: Option<wgpu::DepthStencilStateDescriptor>;
 
     fn layouts(&self) -> &[BindGroupLayout];
-    fn vertex_module(&self) -> &[u8];
-    fn fragment_module(&self) -> &[u8];
+    fn vertex_module_path(&self) -> &Path;
+    fn fragment_module_path(&self) -> &Path;
 }
 
 pub struct RenderPipeline {
@@ -15,7 +18,7 @@ pub struct RenderPipeline {
 }
 
 impl RenderPipeline {
-    pub fn new<S: RenderShader>(device: &wgpu::Device, shader: S) -> Self {
+    pub fn new<S: RenderShader>(device: &wgpu::Device, shader: &S) -> error::Result<Self> {
         let layouts = shader
             .layouts()
             .iter()
@@ -27,13 +30,19 @@ impl RenderPipeline {
         });
 
         let vmodule = device.create_shader_module(
-            &wgpu::read_spirv(std::io::Cursor::new(shader.vertex_module()))
-                .expect("failed to create vertex shader spir-v"),
+            &wgpu::read_spirv(
+                File::open(shader.vertex_module_path())
+                    .map_err(|_| APURRendererError::ErrorOpeningShaderSPV)?,
+            )
+            .expect("failed to create vertex shader spir-v"),
         );
 
         let fmodule = device.create_shader_module(
-            &wgpu::read_spirv(std::io::Cursor::new(shader.fragment_module()))
-                .expect("failed to create fragment shader spir-v"),
+            &wgpu::read_spirv(
+                File::open(shader.fragment_module_path())
+                    .map_err(|_| APURRendererError::ErrorOpeningShaderSPV)?,
+            )
+            .expect("failed to create fragment shader spir-v"),
         );
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -62,7 +71,7 @@ impl RenderPipeline {
             alpha_to_coverage_enabled: false,
         });
 
-        Self { pipeline }
+        Ok(Self { pipeline })
     }
 }
 
