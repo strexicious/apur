@@ -1,4 +1,5 @@
 use log::trace;
+use wgpu::util::DeviceExt;
 use zerocopy::{AsBytes, FromBytes, LayoutVerified};
 
 use super::error as apur_error;
@@ -20,14 +21,15 @@ impl ManagedBuffer {
         usage: wgpu::BufferUsage,
         data: &[T],
     ) -> Self {
-        let byte_data = data
-            .iter()
-            .flat_map(|el| el.as_bytes().to_vec())
-            .collect::<Vec<_>>();
-        let buffer = device.create_buffer_with_data(
-            byte_data.as_slice(),
-            usage | wgpu::BufferUsage::MAP_WRITE | wgpu::BufferUsage::MAP_READ,
-        );
+        let byte_data = data.as_bytes();
+
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: byte_data,
+            usage: usage,
+        });
+
+        trace!("created buffer data {:?}", byte_data);
 
         Self {
             buffer,
@@ -35,10 +37,9 @@ impl ManagedBuffer {
         }
     }
 
-    /// # Panics
-    /// If data is too big to fit in the buffer at the offset provided.
-    pub async fn update_data<T: AsBytes>(
+    pub fn write_data<T: AsBytes>(
         &mut self,
+        queue: &wgpu::Queue,
         offset: usize,
         data: &[T],
     ) -> apur_error::Result<()> {
@@ -46,32 +47,24 @@ impl ManagedBuffer {
             return Err(apur_error::APURRendererError::BufferDataSizeMismatch);
         }
 
-        let byte_data = data
-            .iter()
-            .flat_map(|el| el.as_bytes().to_vec())
-            .collect::<Vec<_>>();
-        let mut buf_map = self
-            .buffer
-            .map_write(
-                offset as wgpu::BufferAddress,
-                byte_data.len() as wgpu::BufferAddress,
-            )
-            .await
-            .expect("failed to map_write into the buffer");
-        buf_map.as_slice().copy_from_slice(byte_data.as_slice());
+        queue.write_buffer(&self.buffer, offset as u64, data.as_bytes());
 
-        trace!("Wrote to a mapped buffer {:?}", byte_data);
+        trace!("wrote data {:?}", data.as_bytes());
 
         Ok(())
     }
 
+    /// TODO: dunno what happens when we read if the usage of the buffer as not MAP_READ
     pub async fn read_data<T: FromBytes + Copy>(&mut self) -> apur_error::Result<Vec<T>> {
-        let buf_map = self
-            .buffer
-            .map_read(0, self.size_bytes as wgpu::BufferAddress)
+        let buf_slice = self.buffer.slice(..);
+        buf_slice
+            .map_async(wgpu::MapMode::Read)
             .await
             .expect("failed to map_read from the buffer");
-        LayoutVerified::new_slice(buf_map.as_slice())
+
+        trace!("read data {:?}", &*buf_slice.get_mapped_range());
+
+        LayoutVerified::new_slice(&*buf_slice.get_mapped_range())
             .ok_or(apur_error::APURRendererError::BufferTypeInterpretationFailed)
             .map(|l| l.into_slice().to_owned())
     }

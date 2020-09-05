@@ -9,5 +9,5 @@ layout(set = 0, binding = 1) uniform Light {
 };
 
 void main() {
-    out_color = vec4(max(0.1, dot(f_normal, direction)) * vec3(1.0, 1.0, 0.0), 1.0);
+    out_color = vec4(max(0.1, dot(f_normal, -direction)) * vec3(1.0, 1.0, 0.0), 1.0);
 }

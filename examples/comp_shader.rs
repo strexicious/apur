@@ -7,6 +7,7 @@ use apur::renderer::{
     pipeline::{ComputePipeline, ComputeShader},
 };
 use futures::{executor, FutureExt};
+use std::path::Path;
 
 const WIDTH: u16 = 800;
 const HEIGHT: u16 = 800;
@@ -23,6 +24,7 @@ impl CollatzShader {
                 wgpu::BindingType::StorageBuffer {
                     dynamic: false,
                     readonly: false,
+                    min_binding_size: None,
                 },
             )
             .build(device);
@@ -37,8 +39,8 @@ impl ComputeShader for CollatzShader {
         &self.layouts
     }
 
-    fn compute_module(&self) -> &[u8] {
-        include_bytes!("../res/shaders/collatz.comp.spv")
+    fn compute_module_path(&self) -> &Path {
+        "res/shaders/collatz/collatz.comp.spv".as_ref()
     }
 }
 
@@ -51,8 +53,11 @@ struct GeneralDriver {
 
 impl GeneralDriver {
     fn new(device: &wgpu::Device) -> apur_error::Result<Self> {
-        let nums =
-            ManagedBuffer::from_data::<u32>(device, wgpu::BufferUsage::STORAGE, &[1, 4, 3, 295]);
+        let nums = ManagedBuffer::from_data::<u32>(
+            device,
+            wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::MAP_READ,
+            &[1, 4, 3, 295],
+        );
 
         let shader = CollatzShader::new(device);
         let bind_group = shader.layouts()[0]
@@ -60,7 +65,7 @@ impl GeneralDriver {
             .with_buffer(&nums)?
             .build(device)?;
 
-        let pipe = ComputePipeline::new(device, shader);
+        let pipe = ComputePipeline::new(device, shader)?;
 
         let done = false;
 
@@ -78,7 +83,7 @@ impl ApplicationDriver for GeneralDriver {
         None
     }
 
-    fn update(&mut self, app: &mut Application) -> Vec<wgpu::CommandBuffer> {
+    fn update(&mut self, app: &mut Application) {
         if !self.done {
             let mut encoder =
                 app.device()
@@ -92,17 +97,13 @@ impl ApplicationDriver for GeneralDriver {
                 cpass.set_bind_group(0, &self.bind_group, &[]);
                 cpass.dispatch(4, 1, 1);
             }
-            return vec![encoder.finish()];
-        }
 
-        vec![]
+            let queue = app.queue();
+            queue.submit(vec![encoder.finish()])
+        }
     }
 
-    fn render(
-        &mut self,
-        app: &mut Application,
-        _frame: &wgpu::SwapChainOutput,
-    ) -> Vec<wgpu::CommandBuffer> {
+    fn render(&mut self, app: &mut Application, frame: &wgpu::SwapChainFrame) {
         if !self.done {
             let output = executor::block_on(apur::future::post_pending(
                 self.nums.read_data::<u32>().boxed(),
@@ -113,8 +114,6 @@ impl ApplicationDriver for GeneralDriver {
 
             self.done = true;
         }
-
-        vec![]
     }
 }
 
@@ -122,7 +121,9 @@ fn main() {
     env_logger::init();
 
     let app = executor::block_on(Application::new("solid-shader example", WIDTH, HEIGHT)).unwrap();
-    let driver = GeneralDriver::new(app.device());
 
-    app.run(driver.unwrap());
+    match GeneralDriver::new(app.device()) {
+        Ok(driver) => app.run(driver),
+        Err(e) => eprintln!("startup error: {:?}", e),
+    }
 }

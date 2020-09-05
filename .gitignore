@@ -4,4 +4,4 @@ target/
 **/*.rs.bk
 
 res/models/
-res/shaders/*.spv
+res/shaders/**/*.spv

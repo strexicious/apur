@@ -1,6 +1,5 @@
 use super::buffer::ManagedBuffer;
 use super::error as apur_error;
-use super::texture::{Sampler, Texture};
 
 #[derive(Debug)]
 pub struct BindGroupLayoutBuilder<'a> {
@@ -31,6 +30,7 @@ impl<'a> BindGroupLayoutBuilder<'a> {
             visibility,
             binding: binding as u32,
             ty: binding_type,
+            count: None,
         });
         self
     }
@@ -38,11 +38,14 @@ impl<'a> BindGroupLayoutBuilder<'a> {
     pub fn build(self, device: &wgpu::Device) -> BindGroupLayout {
         let entries = self.entries;
         let inner_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            bindings: &entries,
+            entries: &entries,
             label: None,
         });
 
-        BindGroupLayout { entries, inner_layout }
+        BindGroupLayout {
+            entries,
+            inner_layout,
+        }
     }
 }
 
@@ -76,7 +79,7 @@ impl AsRef<wgpu::BindGroupLayout> for BindGroupLayout {
 pub struct BindGroupBuilder<'a> {
     layout: &'a BindGroupLayout,
     label: Option<&'a str>,
-    bindings: Vec<wgpu::Binding<'a>>,
+    bindings: Vec<wgpu::BindGroupEntry<'a>>,
 }
 
 impl<'a> BindGroupBuilder<'a> {
@@ -96,17 +99,14 @@ impl<'a> BindGroupBuilder<'a> {
             _ => return Err(apur_error::APURRendererError::BindingResourceTypeUnmatched),
         }
 
-        self.bindings.push(wgpu::Binding {
+        self.bindings.push(wgpu::BindGroupEntry {
             binding: binding as u32,
-            resource: wgpu::BindingResource::Buffer {
-                buffer: buffer.as_ref(),
-                range: 0..buffer.size_bytes() as u64,
-            },
+            resource: wgpu::BindingResource::Buffer(buffer.as_ref().slice(..)),
         });
         Ok(self)
     }
 
-    pub fn with_sampler(mut self, sampler: &'a Sampler) -> apur_error::Result<Self> {
+    pub fn with_sampler(mut self, sampler: &'a wgpu::Sampler) -> apur_error::Result<Self> {
         if self.bindings.len() == self.layout.entries.len() {
             return Err(apur_error::APURRendererError::NumOfBindingsOverflowed);
         }
@@ -117,14 +117,14 @@ impl<'a> BindGroupBuilder<'a> {
             _ => return Err(apur_error::APURRendererError::BindingResourceTypeUnmatched),
         }
 
-        self.bindings.push(wgpu::Binding {
+        self.bindings.push(wgpu::BindGroupEntry {
             binding: binding as u32,
-            resource: wgpu::BindingResource::Sampler(sampler.as_ref()),
+            resource: wgpu::BindingResource::Sampler(sampler),
         });
         Ok(self)
     }
 
-    pub fn with_texture(mut self, texture: &'a impl Texture) -> apur_error::Result<Self> {
+    pub fn with_texture(mut self, texture_view: &'a wgpu::TextureView) -> apur_error::Result<Self> {
         if self.bindings.len() == self.layout.entries.len() {
             return Err(apur_error::APURRendererError::NumOfBindingsOverflowed);
         }
@@ -135,21 +135,21 @@ impl<'a> BindGroupBuilder<'a> {
             _ => return Err(apur_error::APURRendererError::BindingResourceTypeUnmatched),
         }
 
-        self.bindings.push(wgpu::Binding {
+        self.bindings.push(wgpu::BindGroupEntry {
             binding: binding as u32,
-            resource: wgpu::BindingResource::TextureView(texture.view()),
+            resource: wgpu::BindingResource::TextureView(texture_view),
         });
         Ok(self)
     }
 
     pub fn build(self, device: &wgpu::Device) -> apur_error::Result<wgpu::BindGroup> {
         if self.bindings.len() < self.layout.entries.len() {
-            return Err(apur_error::APURRendererError::NumOfBindingsOverflowed);
+            return Err(apur_error::APURRendererError::NumOfBindingsUnderflowed);
         }
 
         Ok(device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: self.layout.as_ref(),
-            bindings: &self.bindings,
+            entries: &self.bindings,
             label: self.label,
         }))
     }

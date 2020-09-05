@@ -1,0 +1,1 @@
+Get-ChildItem -Path *\*.vert, *\*.frag, *\*.comp | ForEach-Object { glslangValidator -V $_.FullName -o "$_.spv" }

@@ -1,4 +1,5 @@
-use apur_renderer::{buffer::ManagedBuffer, glam};
+use super::renderer::buffer::ManagedBuffer;
+use super::math::BBox;
 
 pub struct DirectionalLight {
     direction: glam::Vec3,
@@ -6,8 +7,8 @@ pub struct DirectionalLight {
 }
 
 impl DirectionalLight {
-    pub fn new<T: Into<glam::Vec3>>(device: &wgpu::Device, v: T) -> Self {
-        let direction = v.into().normalize();
+    pub fn new<T: Into<glam::Vec3>>(device: &wgpu::Device, dir: T, bbox: BBox) -> Self {
+        let direction = dir.into().normalize();
         let (x, y, z) = direction.into();
 
         let buffer = ManagedBuffer::from_data(device, wgpu::BufferUsage::UNIFORM, &[x, y, z, 0.0]);

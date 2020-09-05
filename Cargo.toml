@@ -5,24 +5,19 @@ authors = ["Strexicious <strexicious@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-apur_renderer = { path = "apur_renderer" }
-apur_model = { path = "apur_model" }
-wgpu = "0.5.0"
+wgpu = "0.6.0"
 futures = "0.3.5"
 log = "0.4"
 env_logger = "0.7.1"
 winit = "0.21.0"
 glam = "0.8.6"
+image = "0.22.4"
+zerocopy = "0.3.0"
+tobj = "2.0.2"
 
 [dev-dependencies]
 criterion = "0.3.3"
 notify = "5.0.0-pre.3"
-
-[workspace]
-members = [
-    "apur_renderer",
-    "apur_model",
-]
 
 [[example]]
 name = "solid_shader"

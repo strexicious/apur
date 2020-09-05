@@ -1,4 +1,4 @@
-use apur_renderer::buffer::ManagedBuffer;
+use crate::renderer::buffer::ManagedBuffer;
 
 /// Contains a single position component 3-Floats buffer.
 pub struct UncoloredTriangle {

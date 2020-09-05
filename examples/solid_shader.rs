@@ -1,5 +1,4 @@
-use std::path::Path;
-use apur::model::prefabs::UncoloredTriangle;
+use apur::mesh::prefabs::UncoloredTriangle;
 use apur::renderer::{
     application::{Application, ApplicationDriver},
     bind_group::{BindGroupLayout, BindGroupLayoutBuilder},
@@ -8,9 +7,9 @@ use apur::renderer::{
     error as apur_error,
     event_handler::EventHandler,
     pipeline::{RenderPipeline, RenderShader},
-    texture::{DepthTexture, Texture},
 };
 use futures::{executor, FutureExt};
+use std::path::Path;
 
 const WIDTH: u16 = 800;
 const HEIGHT: u16 = 800;
@@ -24,11 +23,17 @@ impl SolidShader {
         let layout = BindGroupLayoutBuilder::new()
             .with_binding(
                 wgpu::ShaderStage::VERTEX,
-                wgpu::BindingType::UniformBuffer { dynamic: false },
+                wgpu::BindingType::UniformBuffer {
+                    dynamic: false,
+                    min_binding_size: None,
+                },
             )
             .with_binding(
                 wgpu::ShaderStage::FRAGMENT,
-                wgpu::BindingType::UniformBuffer { dynamic: false },
+                wgpu::BindingType::UniformBuffer {
+                    dynamic: false,
+                    min_binding_size: None,
+                },
             )
             .build(device);
 
@@ -72,10 +77,12 @@ impl RenderShader for SolidShader {
             format: wgpu::TextureFormat::Depth32Float,
             depth_write_enabled: true,
             depth_compare: wgpu::CompareFunction::LessEqual,
-            stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
-            stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
-            stencil_read_mask: !0,
-            stencil_write_mask: !0,
+            stencil: wgpu::StencilStateDescriptor {
+                front: wgpu::StencilStateFaceDescriptor::IGNORE,
+                back: wgpu::StencilStateFaceDescriptor::IGNORE,
+                read_mask: !0,
+                write_mask: !0,
+            },
         });
 
     fn layouts(&self) -> &[BindGroupLayout] {
@@ -83,18 +90,18 @@ impl RenderShader for SolidShader {
     }
 
     fn vertex_module_path(&self) -> &Path {
-        "res/shaders/solid.vert.spv".as_ref()
+        "res/shaders/solid/solid.vert.spv".as_ref()
     }
 
-    fn fragment_module_path(&self) -> &Path {
-        "res/shaders/solid.frag.spv".as_ref()
+    fn fragment_module_path(&self) -> Option<&Path> {
+        Some("res/shaders/solid/solid.frag.spv".as_ref())
     }
 }
 
 struct GeneralDriver {
     cam_controller: CameraController,
     pipe: RenderPipeline,
-    ds_texture: DepthTexture,
+    ds_texture: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
     triangle: UncoloredTriangle,
 }
@@ -116,8 +123,22 @@ impl GeneralDriver {
             .with_buffer(&color)?
             .build(device)?;
 
-        let pipe = RenderPipeline::new(device, &shader).unwrap();
-        let ds_texture = DepthTexture::new(device, WIDTH as u32, HEIGHT as u32);
+        let pipe = RenderPipeline::new(device, &shader)?;
+        let ds_texture = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d {
+                    width: WIDTH as u32,
+                    height: HEIGHT as u32,
+                    depth: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Depth32Float,
+                usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         let triangle = UncoloredTriangle::new(device);
 
@@ -136,25 +157,11 @@ impl ApplicationDriver for GeneralDriver {
         Some(&mut self.cam_controller)
     }
 
-    fn update(&mut self, app: &mut Application) -> Vec<wgpu::CommandBuffer> {
-        executor::block_on(apur::future::post_pending(
-            self.cam_controller.update().boxed(),
-            // difference between Poll and Wait:
-            // - Poll: resolve the futures for mappings that
-            //   are already done, and quit
-            // - Wait: wait for all mappings to be done
-            //   in order to resolve all pending futures
-            || app.device().poll(wgpu::Maintain::Wait),
-        ));
-
-        vec![]
+    fn update(&mut self, app: &mut Application) {
+        self.cam_controller.update(app.queue()).expect("camera update failed");
     }
 
-    fn render(
-        &mut self,
-        app: &mut Application,
-        frame: &wgpu::SwapChainOutput,
-    ) -> Vec<wgpu::CommandBuffer> {
+    fn render(&mut self, app: &mut Application, frame: &wgpu::SwapChainFrame) {
         let mut encoder = app
             .device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -173,36 +180,32 @@ impl ApplicationDriver for GeneralDriver {
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &frame.view,
+                    attachment: &frame.output.view,
                     resolve_target: None,
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: CLEAR_COLOR,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(CLEAR_COLOR),
+                        store: true,
+                    },
                 }],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                    attachment: self.ds_texture.view(),
-                    depth_load_op: wgpu::LoadOp::Clear,
-                    depth_store_op: wgpu::StoreOp::Store,
-                    clear_depth: 1.0,
-                    stencil_load_op: wgpu::LoadOp::Load,
-                    stencil_store_op: wgpu::StoreOp::Store,
-                    clear_stencil: 0,
+                    attachment: &self.ds_texture,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: Some(wgpu::Operations::default()),
                 }),
             });
 
             rpass.set_pipeline(self.pipe.as_ref());
             rpass.set_bind_group(0, &self.bind_group, &[]);
 
-            rpass.set_vertex_buffer(
-                0,
-                self.triangle.vertex_buffer().as_ref(),
-                0,
-                self.triangle.vertex_buffer().size_bytes() as u64,
-            );
+            rpass.set_vertex_buffer(0, self.triangle.vertex_buffer().as_ref().slice(..));
             rpass.draw(0..3, 0..1);
         }
 
-        vec![encoder.finish()]
+        let queue = app.queue();
+        queue.submit(vec![encoder.finish()])
     }
 }
 
@@ -210,7 +213,8 @@ fn main() {
     env_logger::init();
 
     let app = executor::block_on(Application::new("solid-shader example", WIDTH, HEIGHT)).unwrap();
-    let driver = GeneralDriver::new(app.device());
-
-    app.run(driver.unwrap());
+    match GeneralDriver::new(app.device()) {
+        Ok(driver) => app.run(driver),
+        Err(e) => eprintln!("startup error: {:?}", e),
+    }
 }

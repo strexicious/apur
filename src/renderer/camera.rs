@@ -58,7 +58,7 @@ impl Camera {
     }
 
     fn transforms_data(&self) -> Vec<f32> {
-        let mut transforms_data = Vec::<f32>::new();
+        let mut transforms_data = Vec::new();
         transforms_data.extend(self.view().to_cols_array().as_ref());
         transforms_data.extend(self.position.extend(0.0).as_ref());
         transforms_data.extend(self.projection().to_cols_array().as_ref());
@@ -98,7 +98,6 @@ pub struct CameraController {
     speed: f32,
     delta_time: f32,
     buffer: ManagedBuffer,
-    needs_update: bool,
 }
 
 impl CameraController {
@@ -107,17 +106,15 @@ impl CameraController {
         let delta_time = 0f32;
         let buffer = ManagedBuffer::from_data(
             device,
-            wgpu::BufferUsage::UNIFORM,
+            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             &camera.transforms_data(),
         );
-        let needs_update = false;
 
         Self {
             camera,
             speed,
             delta_time,
             buffer,
-            needs_update,
         }
     }
 
@@ -133,22 +130,13 @@ impl CameraController {
         self.delta_time = delta_time;
     }
 
-    pub async fn update(&mut self) {
-        if self.needs_update {
-            self.needs_update = false;
-
-            self.buffer
-                .update_data(0, &self.camera.transforms_data())
-                .await
-                .unwrap();
-        }
+    pub fn update(&mut self, queue: &wgpu::Queue) -> super::error::Result<()> {
+        self.buffer.write_data(queue, 0, &self.camera.transforms_data())
     }
 }
 
 impl EventHandler for CameraController {
     fn handle_key(&mut self, key_input: KeyboardInput) {
-        self.needs_update = true;
-
         match key_input.scancode {
             0x11 => self.camera.move_pos(self.speed),
             0x1F => self.camera.move_pos(-self.speed),
@@ -157,8 +145,6 @@ impl EventHandler for CameraController {
     }
 
     fn handle_mouse_move(&mut self, dx: f32, dy: f32) {
-        self.needs_update = true;
-
         self.camera.change_angle(dx, dy);
     }
 }

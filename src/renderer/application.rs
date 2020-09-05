@@ -13,12 +13,8 @@ use super::event_handler::EventHandler;
 /// handling events and updating during that time.
 pub trait ApplicationDriver: 'static {
     fn current_event_handler(&mut self, app: &mut Application) -> Option<&mut dyn EventHandler>;
-    fn update(&mut self, app: &mut Application) -> Vec<wgpu::CommandBuffer>;
-    fn render(
-        &mut self,
-        app: &mut Application,
-        frame: &wgpu::SwapChainOutput,
-    ) -> Vec<wgpu::CommandBuffer>;
+    fn update(&mut self, app: &mut Application);
+    fn render(&mut self, app: &mut Application, frame: &wgpu::SwapChainFrame);
 }
 
 pub struct Application {
@@ -27,6 +23,7 @@ pub struct Application {
     swapchain: wgpu::SwapChain,
     queue: wgpu::Queue,
     device: wgpu::Device,
+    staging_belt: wgpu::util::StagingBelt,
 }
 
 impl Application {
@@ -35,6 +32,8 @@ impl Application {
         width: u16,
         height: u16,
     ) -> apur_error::Result<Self> {
+        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+
         // we wrap the event_loop into an option because
         // the option is consumed when the event_loop is ran,
         // and we leave the rest of the Application intact.
@@ -46,22 +45,24 @@ impl Application {
             .build(event_loop.as_ref().unwrap())
             .expect("Error building window");
 
-        let surface = wgpu::Surface::create(&window);
-        let adapter = wgpu::Adapter::request(
-            &wgpu::RequestAdapterOptions {
+        let surface = unsafe { instance.create_surface(&window) };
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: Some(&surface),
-            },
-            wgpu::BackendBit::PRIMARY,
-        )
-        .await
-        .expect("Couldn't get hardware adapter");
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                extensions: wgpu::Extensions::default(),
-                limits: wgpu::Limits::default(),
             })
-            .await;
+            .await
+            .expect("Couldn't get hardware adapter");
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    features: wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
+                    ..Default::default()
+                },
+                None,
+            )
+            .await
+            .expect("Error requesting device");
         let swapchain = device.create_swap_chain(
             &surface,
             &wgpu::SwapChainDescriptor {
@@ -73,17 +74,34 @@ impl Application {
             },
         );
 
+        // TODO: we naively allocate 1KiB of staging buffer, but it should probably
+        // be driven on some kind of heuristic of each application
+        let staging_belt = wgpu::util::StagingBelt::new(1024);
+
         Ok(Self {
             window,
             event_loop,
             swapchain,
             queue,
             device,
+            staging_belt,
         })
     }
 
     pub fn device(&self) -> &wgpu::Device {
         &self.device
+    }
+
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
+
+    pub fn window(&self) -> &Window {
+        &self.window
+    }
+
+    pub fn staging_belt(&mut self) -> &mut wgpu::util::StagingBelt {
+        &mut self.staging_belt
     }
 
     /// Executes the main event loop which polls events for the owned window.
@@ -126,17 +144,15 @@ impl Application {
                     _ => {}
                 },
                 Event::MainEventsCleared => {
-                    let cmd_buffers = driver.update(&mut self);
-                    self.queue.submit(&cmd_buffers);
+                    driver.update(&mut self);
                     self.window.request_redraw();
                 }
                 Event::RedrawRequested(_) => {
                     let next_frame = self
                         .swapchain
-                        .get_next_texture()
+                        .get_current_frame()
                         .expect("Failed to get next frame from swapchain");
-                    let cmd_buffers = driver.render(&mut self, &next_frame);
-                    self.queue.submit(&cmd_buffers);
+                    driver.render(&mut self, &next_frame);
                 }
                 _ => {}
             }
