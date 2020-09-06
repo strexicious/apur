@@ -55,7 +55,7 @@ impl GeneralDriver {
     fn new(device: &wgpu::Device) -> apur_error::Result<Self> {
         let nums = ManagedBuffer::from_data::<u32>(
             device,
-            wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::MAP_READ,
+            wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_SRC,
             &[1, 4, 3, 295],
         );
 
@@ -105,8 +105,29 @@ impl ApplicationDriver for GeneralDriver {
 
     fn render(&mut self, app: &mut Application, frame: &wgpu::SwapChainFrame) {
         if !self.done {
+            let mut out_buf = ManagedBuffer::new::<u32>(
+                app.device(),
+                wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ,
+                4,
+                false,
+            );
+
+            let mut enc = app
+                .device()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            enc.copy_buffer_to_buffer(
+                self.nums.as_ref(),
+                0,
+                out_buf.as_ref(),
+                0,
+                self.nums.size_bytes() as u64,
+            );
+
+            let queue = app.queue();
+            queue.submit(vec![enc.finish()]);
+
             let output = executor::block_on(apur::future::post_pending(
-                self.nums.read_data::<u32>().boxed(),
+                out_buf.read_data::<u32>().boxed(),
                 || app.device().poll(wgpu::Maintain::Wait),
             ));
 

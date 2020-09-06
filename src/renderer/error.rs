@@ -4,6 +4,8 @@ pub type Result<T> = std::result::Result<T, APURRendererError>;
 pub enum APURRendererError {
     BufferDataSizeMismatch,
     BufferTypeInterpretationFailed,
+    BufferUsageNotMapRead,
+    BufferUsageNotCopyDst,
     BindingResourceTypeUnmatched,
     NumOfBindingsOverflowed,
     NumOfBindingsUnderflowed,

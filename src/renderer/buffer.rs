@@ -13,15 +13,38 @@ use super::error as apur_error;
 pub struct ManagedBuffer {
     size_bytes: usize,
     buffer: wgpu::Buffer,
+    usage: wgpu::BufferUsage,
 }
 
 impl ManagedBuffer {
+    pub fn new<T: AsBytes>(
+        device: &wgpu::Device,
+        usage: wgpu::BufferUsage,
+        len: usize,
+        mapped: bool,
+    ) -> Self {
+        let size_bytes = std::mem::size_of::<T>() * len;
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: size_bytes as u64,
+            usage,
+            mapped_at_creation: mapped,
+        });
+
+        Self {
+            buffer,
+            size_bytes,
+            usage,
+        }
+    }
+
     pub fn from_data<T: AsBytes>(
         device: &wgpu::Device,
         usage: wgpu::BufferUsage,
         data: &[T],
     ) -> Self {
         let byte_data = data.as_bytes();
+        let size_bytes = byte_data.len();
 
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
@@ -33,7 +56,8 @@ impl ManagedBuffer {
 
         Self {
             buffer,
-            size_bytes: byte_data.len(),
+            size_bytes,
+            usage,
         }
     }
 
@@ -47,6 +71,10 @@ impl ManagedBuffer {
             return Err(apur_error::APURRendererError::BufferDataSizeMismatch);
         }
 
+        if !self.usage.contains(wgpu::BufferUsage::COPY_DST) {
+            return Err(apur_error::APURRendererError::BufferUsageNotCopyDst);
+        }
+
         queue.write_buffer(&self.buffer, offset as u64, data.as_bytes());
 
         trace!("wrote data {:?}", data.as_bytes());
@@ -54,8 +82,14 @@ impl ManagedBuffer {
         Ok(())
     }
 
-    /// TODO: dunno what happens when we read if the usage of the buffer as not MAP_READ
+    /// If MAPPABLE_PRIMARY_BUFFERS device feature is not enabled, then it's only
+    /// possible to create buffers for staging on the CPU to be MAP_READ which
+    /// serve to also be a COPY_DST for the GPU data buffers.
     pub async fn read_data<T: FromBytes + Copy>(&mut self) -> apur_error::Result<Vec<T>> {
+        if !self.usage.contains(wgpu::BufferUsage::MAP_READ) {
+            return Err(apur_error::APURRendererError::BufferUsageNotMapRead);
+        }
+
         let buf_slice = self.buffer.slice(..);
         buf_slice
             .map_async(wgpu::MapMode::Read)

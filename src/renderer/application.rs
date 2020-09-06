@@ -54,13 +54,7 @@ impl Application {
             .await
             .expect("Couldn't get hardware adapter");
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
-                    ..Default::default()
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor::default(), None)
             .await
             .expect("Error requesting device");
         let swapchain = device.create_swap_chain(
