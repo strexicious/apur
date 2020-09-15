@@ -131,7 +131,7 @@ impl<'a> BindGroupBuilder<'a> {
 
         let binding = self.bindings.len();
         match self.layout.entries[binding as usize].ty {
-            wgpu::BindingType::Sampler { .. } => {}
+            wgpu::BindingType::SampledTexture { .. } => {}
             _ => return Err(apur_error::APURRendererError::BindingResourceTypeUnmatched),
         }
 
