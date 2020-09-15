@@ -194,24 +194,8 @@ impl GeneralDriver {
                     load_op: wgpu::LoadOp::Clear,
                     store_op: wgpu::StoreOp::Store,
                     clear_color: CLEAR_COLOR,
-                },
-                wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &self.sample_points_texture.view(),
-                    resolve_target: None,
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color::BLACK,
-                },
-            ],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                attachment: self.ds_texture.view(),
-                depth_load_op: wgpu::LoadOp::Clear,
-                depth_store_op: wgpu::StoreOp::Store,
-                clear_depth: 1.0,
-                stencil_load_op: wgpu::LoadOp::Load,
-                stencil_store_op: wgpu::StoreOp::Store,
-                clear_stencil: 0,
-            }),
+                }
+            ]),
         });
 
         rpass.set_pipeline(self.pipe.as_ref());

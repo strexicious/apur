@@ -205,7 +205,7 @@ impl ApplicationDriver for GeneralDriver {
         }
 
         let queue = app.queue();
-        queue.submit(vec![encoder.finish()])
+        queue.submit(vec![encoder.finish()]);
     }
 }
 

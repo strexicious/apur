@@ -4,6 +4,7 @@ layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 normal;
 
 layout(location = 0) out vec3 f_normal;
+layout(location = 1) out vec4 f_wpos;
 
 layout(set = 0, binding = 0) uniform CamTransforms {
     mat4 view;
@@ -13,5 +14,6 @@ layout(set = 0, binding = 0) uniform CamTransforms {
 
 void main() {
     f_normal = normal;
-    gl_Position = proj * view * vec4(position, 1.0);
+    f_wpos = vec4(position, 1.0);
+    gl_Position = proj * view * f_wpos;
 }

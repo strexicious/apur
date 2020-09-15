@@ -32,5 +32,9 @@ name = "transparent"
 path = "examples/transparent.rs"
 
 [[example]]
+name = "shadow"
+path = "examples/shadow.rs"
+
+[[example]]
 name = "rayce"
 path = "examples/rayce/main.rs"
