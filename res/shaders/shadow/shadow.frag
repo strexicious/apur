@@ -15,7 +15,7 @@ layout(set = 0, binding = 3) uniform texture2D t_shadow_map;
 void main() {
     vec4 lpos = light_transform * f_wpos;
     vec2 smcoords = lpos.xy * vec2(0.5, -0.5) + vec2(0.5, 0.5);
-    float dim = texture(sampler2DShadow(t_shadow_map, s_nn_r), vec3(smcoords, lpos.z)) * (1.0 - 0.2) + 0.2;
+    float lit = texture(sampler2DShadow(t_shadow_map, s_nn_r), vec3(smcoords, lpos.z)) * 0.8 + 0.2;
 
-    out_color = vec4(max(0.1, dot(f_normal, -direction)) * vec3(1.0, 1.0, 0.0) * dim, 1.0);
+    out_color = vec4(max(0.1, dot(f_normal, -direction)) * vec3(1.0, 1.0, 0.0) * lit, 1.0);
 }

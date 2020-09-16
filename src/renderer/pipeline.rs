@@ -11,6 +11,10 @@ pub trait RenderShader {
     fn layouts(&self) -> &[BindGroupLayout];
     fn vertex_module_path(&self) -> &Path;
     fn fragment_module_path(&self) -> Option<&Path>;
+
+    fn raster_state(&self) -> Option<wgpu::RasterizationStateDescriptor> {
+        Some(wgpu::RasterizationStateDescriptor::default())
+    }
 }
 
 pub struct RenderPipeline {
@@ -56,14 +60,7 @@ impl RenderPipeline {
                     module: module,
                     entry_point: "main",
                 }),
-            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-                front_face: wgpu::FrontFace::Cw,
-                cull_mode: wgpu::CullMode::None,
-                depth_bias: 0,
-                depth_bias_slope_scale: 0.0,
-                depth_bias_clamp: 0.0,
-                clamp_depth: false,
-            }),
+            rasterization_state: shader.raster_state(),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
             color_states: S::COLOR_STATE_DESCS,
             depth_stencil_state: S::DEPTH_STENCIL_DESC,

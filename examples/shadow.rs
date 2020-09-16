@@ -74,6 +74,17 @@ impl RenderShader for LightShader {
                 write_mask: !0,
             },
         });
+    
+    fn raster_state(&self) -> Option<wgpu::RasterizationStateDescriptor> {
+        Some(wgpu::RasterizationStateDescriptor {
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: wgpu::CullMode::None,
+            depth_bias: 0,
+            depth_bias_slope_scale: 1.0,
+            depth_bias_clamp: 0.0,
+            clamp_depth: false,
+        })
+    }
 
     fn layouts(&self) -> &[BindGroupLayout] {
         &self.layouts
